@@ -158,6 +158,44 @@ describe('meals-core', () => {
         });
     });
 
+    describe('summarizeLibrary', () => {
+        test('empty input returns empty array', () => {
+            expect(MealsCore.summarizeLibrary([])).toEqual([]);
+        });
+
+        test('filters out non-meal items and items with unparseable content', () => {
+            const items = [
+                { id: 'a', content: JSON.stringify({ kind: 'meal', name: 'Pasta', default_meal_type: 'dinner' }) },
+                { id: 'b', content: JSON.stringify({ kind: 'slot', name_snapshot: 'X' }) },
+                { id: 'c', content: 'not json' },
+                { id: 'd', content: '' }
+            ];
+            const out = MealsCore.summarizeLibrary(items);
+            expect(out).toEqual([
+                { id: 'a', name: 'Pasta', default_meal_type: 'dinner' }
+            ]);
+        });
+
+        test('sorts case-insensitively by name', () => {
+            const items = [
+                { id: '1', content: JSON.stringify({ kind: 'meal', name: 'banana', default_meal_type: 'snack' }) },
+                { id: '2', content: JSON.stringify({ kind: 'meal', name: 'Apple', default_meal_type: 'snack' }) },
+                { id: '3', content: JSON.stringify({ kind: 'meal', name: 'cherry', default_meal_type: 'snack' }) }
+            ];
+            const names = MealsCore.summarizeLibrary(items).map(m => m.name);
+            expect(names).toEqual(['Apple', 'banana', 'cherry']);
+        });
+
+        test('defaults missing name to empty string and meal_type to "dinner"', () => {
+            const items = [
+                { id: 'x', content: JSON.stringify({ kind: 'meal' }) }
+            ];
+            expect(MealsCore.summarizeLibrary(items)).toEqual([
+                { id: 'x', name: '', default_meal_type: 'dinner' }
+            ]);
+        });
+    });
+
     describe('parseContent / serialize', () => {
         test('round-trip a library meal', () => {
             const meal = {

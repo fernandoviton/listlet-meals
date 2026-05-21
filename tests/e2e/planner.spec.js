@@ -54,7 +54,7 @@ test('week view renders Sat→Fri columns with seeded slots', async ({ page }) =
     ], []);
     await page.goto('/?list=week');
 
-    const headers = page.locator('.day-header');
+    const headers = page.locator('.day-header .day-label');
     await expect(headers).toHaveText(['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 
     await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText('Pasta');

@@ -84,7 +84,10 @@ var App = (function() {
                 .sort(function(a, b) { return a.order - b.order; });
 
             html += '<div class="day-column" data-day="' + day + '">';
-            html += '<div class="day-header">' + DAY_LABELS[day] + '</div>';
+            html += '<div class="day-header">' +
+                '<span class="day-label">' + DAY_LABELS[day] + '</span>' +
+                '<button type="button" class="day-add" data-day="' + day + '" title="Add meal">+</button>' +
+                '</div>';
             html += '<div class="day-slots">';
             for (var i = 0; i < daySlots.length; i++) {
                 html += renderSlotCard(daySlots[i]);
@@ -96,11 +99,17 @@ var App = (function() {
         }
         html += '</div></div>';
         html += '<dialog id="recipe-dialog"><div class="dialog-body"></div><button class="dialog-close" type="button">Close</button></dialog>';
+        html += '<dialog id="picker-dialog">' +
+            '<div class="picker-header">Add meal to <span class="picker-day"></span></div>' +
+            '<div class="picker-body"></div>' +
+            '<button class="picker-close" type="button">Cancel</button>' +
+            '</dialog>';
         container.innerHTML = html;
 
         bindCardEvents();
         bindFilterEvents();
         bindDragEvents();
+        bindAddDayEvents();
     }
 
     var saveTimer = null;
@@ -205,6 +214,80 @@ var App = (function() {
                 currentFilter = e.target.dataset.filter;
                 render();
             });
+        }
+    }
+
+    function bindAddDayEvents() {
+        var addBtns = container.querySelectorAll('.day-add');
+        for (var i = 0; i < addBtns.length; i++) {
+            addBtns[i].addEventListener('click', onOpenPicker);
+        }
+        var dialog = document.getElementById('picker-dialog');
+        if (dialog) {
+            dialog.querySelector('.picker-close').addEventListener('click', function() { dialog.close(); });
+            dialog.addEventListener('click', function(e) {
+                if (e.target === dialog) dialog.close();
+            });
+        }
+    }
+
+    async function onOpenPicker(e) {
+        var day = e.currentTarget.dataset.day;
+        var dialog = document.getElementById('picker-dialog');
+        var bodyEl = dialog.querySelector('.picker-body');
+        dialog.querySelector('.picker-day').textContent = DAY_LABELS[day] || day;
+        dialog.dataset.day = day;
+        bodyEl.innerHTML = '<div class="picker-loading">Loading…</div>';
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+
+        if (!libraryApi) libraryApi = createApi('library');
+        var libItems;
+        try {
+            libItems = await libraryApi.fetchItems();
+            libraryCache = libItems;
+        } catch (err) {
+            bodyEl.innerHTML = '<div class="picker-empty">Failed to load library.</div>';
+            return;
+        }
+
+        var meals = MealsCore.summarizeLibrary(libItems);
+        if (!meals.length) {
+            bodyEl.innerHTML = '<div class="picker-empty">No meals in library yet.</div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < meals.length; i++) {
+            html += '<button type="button" class="picker-meal" data-id="' + escapeHtml(meals[i].id) + '">' +
+                escapeHtml(meals[i].name || '(unnamed)') + '</button>';
+        }
+        bodyEl.innerHTML = html;
+        var btns = bodyEl.querySelectorAll('.picker-meal');
+        for (var j = 0; j < btns.length; j++) {
+            btns[j].addEventListener('click', onPickMeal);
+        }
+    }
+
+    async function onPickMeal(e) {
+        var btn = e.currentTarget;
+        var libraryItemId = btn.dataset.id;
+        var dialog = document.getElementById('picker-dialog');
+        var day = dialog.dataset.day;
+        var libraryItem = null;
+        if (libraryCache) {
+            for (var i = 0; i < libraryCache.length; i++) {
+                if (libraryCache[i].id === libraryItemId) { libraryItem = libraryCache[i]; break; }
+            }
+        }
+        if (!libraryItem) { dialog.close(); return; }
+
+        var result = MealsCore.addSlot(items, libraryItem, day);
+        dialog.close();
+        try {
+            await api.createItem({ content: result.newSlotContent });
+            items = await api.fetchItems();
+            render();
+        } catch (err) {
+            console.error('Add slot failed:', err);
         }
     }
 

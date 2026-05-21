@@ -97,6 +97,27 @@ var MealsCore = (function() {
         return out;
     }
 
+    function summarizeLibrary(items) {
+        var out = [];
+        for (var i = 0; i < items.length; i++) {
+            var parsed = parseContent(items[i].content);
+            if (!parsed || parsed.kind !== 'meal') continue;
+            out.push({
+                id: items[i].id,
+                name: parsed.name || '',
+                default_meal_type: parsed.default_meal_type || 'dinner'
+            });
+        }
+        out.sort(function(a, b) {
+            var an = a.name.toLowerCase();
+            var bn = b.name.toLowerCase();
+            if (an < bn) return -1;
+            if (an > bn) return 1;
+            return 0;
+        });
+        return out;
+    }
+
     function filterSlotsByType(slots, type) {
         if (type === 'all') return slots;
         return slots.filter(function(s) { return s.meal_type === type; });
@@ -109,6 +130,7 @@ var MealsCore = (function() {
         addSlot: addSlot,
         moveSlot: moveSlot,
         summarizeMacros: summarizeMacros,
+        summarizeLibrary: summarizeLibrary,
         filterSlotsByType: filterSlotsByType
     };
 })();
