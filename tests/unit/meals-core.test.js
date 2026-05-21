@@ -26,6 +26,58 @@ describe('meals-core', () => {
         });
     });
 
+    describe('summarizeMacros', () => {
+        test('empty list returns empty object', () => {
+            expect(MealsCore.summarizeMacros([])).toEqual({});
+        });
+
+        test('sums all four macros when all present', () => {
+            const slots = [
+                { macros_snapshot: { cal: 100, protein: 10, carbs: 20, fat: 5 } },
+                { macros_snapshot: { cal: 200, protein: 15, carbs: 30, fat: 8 } }
+            ];
+            expect(MealsCore.summarizeMacros(slots)).toEqual({
+                cal: 300, protein: 25, carbs: 50, fat: 13
+            });
+        });
+
+        test('omits keys that are null in all contributing slots', () => {
+            const slots = [
+                { macros_snapshot: { cal: 100, protein: null, carbs: 20, fat: null } },
+                { macros_snapshot: { cal: 200, protein: null, carbs: 30, fat: null } }
+            ];
+            expect(MealsCore.summarizeMacros(slots)).toEqual({ cal: 300, carbs: 50 });
+        });
+
+        test('ignores missing keys / missing macros_snapshot', () => {
+            const slots = [
+                { macros_snapshot: { cal: 100 } },
+                {},
+                { macros_snapshot: null }
+            ];
+            expect(MealsCore.summarizeMacros(slots)).toEqual({ cal: 100 });
+        });
+    });
+
+    describe('filterSlotsByType', () => {
+        const slots = [
+            { meal_type: 'breakfast', id: 'a' },
+            { meal_type: 'lunch', id: 'b' },
+            { meal_type: 'dinner', id: 'c' },
+            { meal_type: 'snack', id: 'd' }
+        ];
+
+        test('"all" returns identity', () => {
+            expect(MealsCore.filterSlotsByType(slots, 'all')).toEqual(slots);
+        });
+
+        test('specific type returns only matching slots', () => {
+            expect(MealsCore.filterSlotsByType(slots, 'lunch')).toEqual([
+                { meal_type: 'lunch', id: 'b' }
+            ]);
+        });
+    });
+
     describe('moveSlot', () => {
         function s(id, day, order, extra) {
             return Object.assign({ id: id, day: day, order: order }, extra || {});

@@ -74,12 +74,42 @@ var MealsCore = (function() {
         return copy;
     }
 
+    function summarizeMacros(slots) {
+        var keys = ['cal', 'protein', 'carbs', 'fat'];
+        var totals = { cal: 0, protein: 0, carbs: 0, fat: 0 };
+        var seen = { cal: false, protein: false, carbs: false, fat: false };
+        for (var i = 0; i < slots.length; i++) {
+            var m = slots[i] && slots[i].macros_snapshot;
+            if (!m) continue;
+            for (var j = 0; j < keys.length; j++) {
+                var k = keys[j];
+                var v = m[k];
+                if (typeof v === 'number') {
+                    totals[k] += v;
+                    seen[k] = true;
+                }
+            }
+        }
+        var out = {};
+        for (var k2 = 0; k2 < keys.length; k2++) {
+            if (seen[keys[k2]]) out[keys[k2]] = totals[keys[k2]];
+        }
+        return out;
+    }
+
+    function filterSlotsByType(slots, type) {
+        if (type === 'all') return slots;
+        return slots.filter(function(s) { return s.meal_type === type; });
+    }
+
     return {
         parseContent: parseContent,
         serialize: serialize,
         nextOrder: nextOrder,
         addSlot: addSlot,
-        moveSlot: moveSlot
+        moveSlot: moveSlot,
+        summarizeMacros: summarizeMacros,
+        filterSlotsByType: filterSlotsByType
     };
 })();
 
