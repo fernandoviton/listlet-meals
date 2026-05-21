@@ -296,7 +296,39 @@ var App = (function() {
         }
     }
 
+    var seedAttempted = false;
+
+    async function maybeSeedDemoLibrary() {
+        if (seedAttempted) return false;
+        seedAttempted = true;
+        if (!api.isMock || items.length !== 0) return false;
+        var demo = [
+            { name: 'Oatmeal',     recipe: 'Cook oats with milk. Top with berries.',          default_meal_type: 'breakfast', macros: { cal: 320, protein: 12, carbs: 55, fat: 6 } },
+            { name: 'Greek Salad', recipe: 'Tomato, cucumber, feta, olives, olive oil.',      default_meal_type: 'lunch',     macros: { cal: 420, protein: 14, carbs: 18, fat: 32 } },
+            { name: 'Roast Chicken', recipe: 'Roast at 200°C for 45 min. Rest 10 min.',       default_meal_type: 'dinner',    macros: { cal: 650, protein: 55, carbs: 5,  fat: 38 } },
+            { name: 'Apple + PB',  recipe: 'Sliced apple with peanut butter.',                default_meal_type: 'snack',     macros: { cal: 220, protein: 6,  carbs: 28, fat: 11 } },
+            { name: 'Pasta Pomodoro', recipe: 'Boil pasta. Toss with tomato-basil sauce.',     default_meal_type: 'dinner',    macros: { cal: 580, protein: 18, carbs: 95, fat: 10 } }
+        ];
+        for (var i = 0; i < demo.length; i++) {
+            await api.createItem({ content: MealsCore.serialize(Object.assign({ kind: 'meal' }, demo[i])) });
+        }
+        items = await api.fetchItems();
+        return true;
+    }
+
+    async function renderLibraryAsync() {
+        var seeded = await maybeSeedDemoLibrary();
+        if (seeded) {
+            renderLibrarySync();
+        }
+    }
+
     function renderLibrary() {
+        renderLibrarySync();
+        renderLibraryAsync();
+    }
+
+    function renderLibrarySync() {
         var html = '<div class="library">';
         if (!items.length) {
             html += '<div class="library-empty">No meals in library yet.</div>';
