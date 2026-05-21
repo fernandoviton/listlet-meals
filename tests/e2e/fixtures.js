@@ -9,9 +9,9 @@ exports.test = base.test.extend({
             window.CONFIG = {
                 SUPABASE_URL: null,
                 SUPABASE_PUBLISHABLE_KEY: null,
-                APP_TITLE: 'Listlet',
-                DB_TABLE: 'listlet_sample',
-                DEFAULT_LIST_NAME: 'demo'
+                APP_TITLE: 'Listlet Meals',
+                DB_TABLE: 'listlet_meals',
+                DEFAULT_LIST_NAME: 'week'
             };
         });
         await use(page);

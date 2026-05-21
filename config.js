@@ -4,5 +4,5 @@ var CONFIG = {
     SUPABASE_PUBLISHABLE_KEY: '',
     APP_TITLE: 'Listlet Meals',
     DB_TABLE: 'listlet_meals',
-    DEFAULT_LIST_NAME: 'demo'
+    DEFAULT_LIST_NAME: 'week'
 };

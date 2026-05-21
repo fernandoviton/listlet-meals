@@ -1,75 +1,56 @@
 # Listlet Meals
 
-A collaborative web app built on the listlet-shared starter kit.
+A weekly meal planner built on the listlet-shared starter kit.
+
+## Working Agreement
+
+- **TDD anything unit-testable.** Write the failing Jest test first, then implement until green. DOM/glue logic is covered by Playwright E2E only.
+- **Code split.** All state transformations live in `meals-core.js` (pure functions, no DOM, no `window`). `app.js` is a thin render/event-wiring layer. Never put business logic in `app.js`.
+- **Do not edit `shared/`.** It is the upstream starter kit. All meal-specific data is JSON-encoded into the shared `content` column.
+
+## Data model — two lists
+
+The shared API persists `content` only. We use two lists (via `?list=`) and store JSON in each item's `content`:
+
+- `?list=library` — meal definitions
+  ```
+  { kind: "meal", name, recipe, default_meal_type, macros: { cal?, protein?, carbs?, fat? } }
+  ```
+- `?list=week` — planned slots in the hypothetical week
+  ```
+  { kind: "slot", library_id, day, meal_type, order, name_snapshot, macros_snapshot }
+  ```
+
+`name_snapshot` / `macros_snapshot` let the week view render without re-querying the library and survive library deletions. Expanding a slot fetches the live library row for the recipe.
+
+Days: `["sat","sun","mon","tue","wed","thu","fri"]`. Any macro field may be `null` / absent.
 
 ## Architecture
 
-- **No build step.** Vanilla JS using IIFEs. Script tags in HTML, no bundler.
-- **Supabase** backend for auth (Google OAuth), database (PostgreSQL), and realtime sync.
-- **Mock mode** on localhost — skips auth, uses localStorage. No Supabase needed for local dev.
-- **GitHub Pages** for deployment.
+- **No build step.** Vanilla JS using IIFEs. Script tags in HTML.
+- **Supabase** backend (optional). **Mock mode** on localhost uses localStorage.
+- Each list lives at its own localStorage key: `listlet_listlet_meals_<listName>`.
 
 ## File Structure
 
-- `app.js` — **YOUR APP LOGIC.** Replace this with your own code. Must export `App` with `init(container, listName)`.
-- `app.css` — **YOUR APP STYLES.** Replace with your own styles.
-- `shared/` — Shared infrastructure. **Do not edit** — managed by listlet-shared.
-- `config.js` — Template config. Copy to `config.local.js` and fill in Supabase keys.
-- `sql/setup.sql` — Database setup. Run in Supabase SQL Editor.
-
-## Shared Infrastructure (`shared/`)
-
-- `config-loader.js` — Loads config, sets `window.CONFIG`, auto-mocks on localhost
-- `supabase-client.js` — Creates `window.supabaseClient` from CONFIG
-- `api.js` — `createApi(listName)` — Supabase CRUD + mock mode
-- `auth.js` — Google OAuth login, session check, mock bypass
-- `home.js` — Home page: lists all lists, create new, open by name
-- `header.js` — Header bar: app title, home button, profile/logout
-- `sync.js` — Realtime subscriptions + polling fallback
-- `utils.js` — `escapeHtml`, `generateListId`, `getListName`, `hasExplicitListName`
+- `meals-core.js` — pure logic (parseContent, serialize, nextOrder, addSlot, moveSlot, summarizeMacros, filterSlotsByType). Loaded in browser and required by Jest. Covered by `tests/unit/meals-core.test.js`.
+- `app.js` — DOM/render/event-wiring. Calls into `MealsCore` for every state transformation.
+- `app.css` — styles.
+- `shared/` — Shared infrastructure. **Do not edit.**
+- `config.js` / `config.local.js` — `config.local.js` is gitignored and loaded at runtime.
 
 ## Config Keys
 
-- `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` — Supabase project credentials (null = mock mode)
-- `APP_TITLE` — Displayed in header and login page
-- `DEFAULT_LIST_NAME` — Fallback when no `?list=` param
-
-## Database Schema
-
-Each item is its own row in `listlet_sample` (per-row model, not a single JSON blob per list):
-
-- `id` (uuid, PK) — auto-generated
-- `list_name` (text, indexed) — groups items into lists
-- `content` (text) — the item's content
-- `created_at` / `updated_at` (timestamptz) — auto-managed
-
-## API Usage
-
-```js
-var api = createApi(listName);
-var items = await api.fetchItems();              // returns array of item objects
-var item = await api.createItem({content: ''});  // returns created item with id, timestamps
-var updated = await api.updateItem(id, {content: 'new'});  // returns updated item
-await api.deleteItem(id);
-var allLists = await createApi.getAllLists();     // returns [{list_name, count, updated_at}]
-```
-
-## Local Development
-
-```bash
-python -m http.server 8000
-```
-
-Mock mode activates automatically on localhost. No Supabase needed.
+- `APP_TITLE: 'Listlet Meals'`
+- `DB_TABLE: 'listlet_meals'`
+- `DEFAULT_LIST_NAME: 'week'`
 
 ## Testing
 
-```bash
-npm test          # Jest unit tests
-npm run test:e2e  # Playwright E2E tests (starts local server)
+```
+npm test          # Jest unit tests (meals-core)
+npm run test:e2e  # Playwright E2E (planner / library / filter)
 npm run test:all  # Both
 ```
 
-## Deployment
-
-Push to `main` triggers GitHub Pages deploy. Requires `config.js` with real Supabase keys at the deploy root.
+Don't commit on red.
