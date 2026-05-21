@@ -26,6 +26,47 @@ describe('meals-core', () => {
         });
     });
 
+    describe('moveSlot', () => {
+        function s(id, day, order, extra) {
+            return Object.assign({ id: id, day: day, order: order }, extra || {});
+        }
+
+        function bySorted(slots, day) {
+            return slots.filter(x => x.day === day).sort((a, b) => a.order - b.order).map(x => x.id);
+        }
+
+        test('moving within a day reorders and leaves other days alone', () => {
+            const slots = [
+                s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2),
+                s('x', 'tue', 0), s('y', 'tue', 1)
+            ];
+            const moved = MealsCore.moveSlot(slots, 'c', 'mon', 0);
+            expect(bySorted(moved, 'mon')).toEqual(['c', 'a', 'b']);
+            expect(bySorted(moved, 'tue')).toEqual(['x', 'y']);
+        });
+
+        test('moving across days renumbers source and inserts at target index', () => {
+            const slots = [
+                s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2),
+                s('x', 'tue', 0), s('y', 'tue', 1)
+            ];
+            const moved = MealsCore.moveSlot(slots, 'b', 'tue', 1);
+            expect(bySorted(moved, 'mon')).toEqual(['a', 'c']);
+            expect(bySorted(moved, 'tue')).toEqual(['x', 'b', 'y']);
+            for (const day of ['mon', 'tue']) {
+                const orders = moved.filter(x => x.day === day).map(x => x.order).sort();
+                expect(orders).toEqual(orders.map((_, i) => i));
+            }
+        });
+
+        test('is pure (does not mutate input)', () => {
+            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const copy = JSON.parse(JSON.stringify(slots));
+            MealsCore.moveSlot(slots, 'b', 'mon', 0);
+            expect(slots).toEqual(copy);
+        });
+    });
+
     describe('addSlot', () => {
         test('builds slot content from a library meal and day', () => {
             const libraryMeal = {
