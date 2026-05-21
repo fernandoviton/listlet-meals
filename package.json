@@ -1,0 +1,13 @@
+{
+  "name": "listlet-shared",
+  "private": true,
+  "scripts": {
+    "test": "jest",
+    "test:e2e": "npx playwright test",
+    "test:all": "jest && npx playwright test"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@playwright/test": "^1.49.0"
+  }
+}
