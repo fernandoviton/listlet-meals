@@ -156,6 +156,22 @@ body {
     flex: 1 1 100%;
     min-width: 0;
     word-break: break-word;
+    cursor: grab;
+    /* Let the pointerdown long-press fire on touch instead of the
+       browser hijacking it for text-selection / context menu. */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.slot-dragging {
+    opacity: 0.4;
+}
+
+.slot-ghost {
+    opacity: 0.85;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    transform: rotate(1deg);
 }
 
 .slot-meal-type {

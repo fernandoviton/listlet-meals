@@ -113,37 +113,146 @@ var App = (function() {
     }
 
     var saveTimer = null;
+    var LONG_PRESS_MS = 300;
+    var MOVE_CANCEL_PX = 10;
+    var dragState = null;
+
     function bindDragEvents() {
-        var cards = container.querySelectorAll('.slot-card');
-        for (var i = 0; i < cards.length; i++) {
-            cards[i].addEventListener('dragstart', function(e) {
-                var card = e.target.closest('.slot-card');
-                e.dataTransfer.setData('text/plain', card.dataset.id);
-                e.dataTransfer.effectAllowed = 'move';
-            });
-        }
-        var columns = container.querySelectorAll('.day-column');
-        for (var j = 0; j < columns.length; j++) {
-            columns[j].addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                e.currentTarget.classList.add('drag-over');
-            });
-            columns[j].addEventListener('dragleave', function(e) {
-                e.currentTarget.classList.remove('drag-over');
-            });
-            columns[j].addEventListener('drop', onDrop);
+        var handles = container.querySelectorAll('.slot-card .slot-name');
+        for (var i = 0; i < handles.length; i++) {
+            handles[i].addEventListener('pointerdown', onHandlePointerDown);
         }
     }
 
-    async function onDrop(e) {
-        e.preventDefault();
-        var column = e.currentTarget;
-        column.classList.remove('drag-over');
-        var id = e.dataTransfer.getData('text/plain');
-        if (!id) return;
-        var toDay = column.dataset.day;
+    function onHandlePointerDown(e) {
+        // Ignore non-primary mouse buttons.
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        var card = e.target.closest('.slot-card');
+        if (!card) return;
 
+        // Mouse: start drag immediately so desktop UX stays snappy.
+        // Touch / pen: require a long-press so taps + scrolls still work.
+        var immediate = e.pointerType === 'mouse';
+
+        dragState = {
+            id: card.dataset.id,
+            card: card,
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            started: false,
+            ghost: null,
+            lastColumn: null,
+            longPressTimer: null
+        };
+
+        if (immediate) {
+            beginDrag(e);
+        } else {
+            dragState.longPressTimer = setTimeout(function() {
+                if (dragState && !dragState.started) beginDrag(e);
+            }, LONG_PRESS_MS);
+        }
+
+        window.addEventListener('pointermove', onWindowPointerMove);
+        window.addEventListener('pointerup', onWindowPointerUp);
+        window.addEventListener('pointercancel', onWindowPointerCancel);
+    }
+
+    function beginDrag(e) {
+        if (!dragState) return;
+        dragState.started = true;
+        var card = dragState.card;
+        var rect = card.getBoundingClientRect();
+        var ghost = card.cloneNode(true);
+        ghost.classList.add('slot-ghost');
+        ghost.style.position = 'fixed';
+        ghost.style.left = rect.left + 'px';
+        ghost.style.top = rect.top + 'px';
+        ghost.style.width = rect.width + 'px';
+        ghost.style.pointerEvents = 'none';
+        ghost.style.zIndex = '9999';
+        document.body.appendChild(ghost);
+        dragState.ghost = ghost;
+        dragState.offsetX = e.clientX - rect.left;
+        dragState.offsetY = e.clientY - rect.top;
+        card.classList.add('slot-dragging');
+        document.body.style.userSelect = 'none';
+        document.body.style.touchAction = 'none';
+        // Capture so pointermove keeps firing during touch even if finger leaves the handle.
+        try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+
+    function onWindowPointerMove(e) {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+
+        if (!dragState.started) {
+            var dx = e.clientX - dragState.startX;
+            var dy = e.clientY - dragState.startY;
+            if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+                // Moved before long-press fired — treat as scroll/tap, abort.
+                cleanupDrag();
+            }
+            return;
+        }
+
+        var g = dragState.ghost;
+        g.style.left = (e.clientX - dragState.offsetX) + 'px';
+        g.style.top = (e.clientY - dragState.offsetY) + 'px';
+
+        var col = columnAtPoint(e.clientX, e.clientY);
+        if (col !== dragState.lastColumn) {
+            if (dragState.lastColumn) dragState.lastColumn.classList.remove('drag-over');
+            if (col) col.classList.add('drag-over');
+            dragState.lastColumn = col;
+        }
+    }
+
+    function columnAtPoint(x, y) {
+        // Hide the ghost briefly so elementFromPoint sees what's underneath.
+        var g = dragState && dragState.ghost;
+        if (g) g.style.display = 'none';
+        var el = document.elementFromPoint(x, y);
+        if (g) g.style.display = '';
+        if (!el) return null;
+        return el.closest('.day-column');
+    }
+
+    function onWindowPointerUp(e) {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        if (!dragState.started) { cleanupDrag(); return; }
+
+        var col = columnAtPoint(e.clientX, e.clientY);
+        var id = dragState.id;
+        cleanupDrag();
+
+        if (!col) return;
+        var toDay = col.dataset.day;
+        commitMove(id, toDay);
+    }
+
+    function onWindowPointerCancel(e) {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        cleanupDrag();
+    }
+
+    function cleanupDrag() {
+        if (!dragState) return;
+        if (dragState.longPressTimer) clearTimeout(dragState.longPressTimer);
+        if (dragState.ghost && dragState.ghost.parentNode) {
+            dragState.ghost.parentNode.removeChild(dragState.ghost);
+        }
+        if (dragState.card) dragState.card.classList.remove('slot-dragging');
+        if (dragState.lastColumn) dragState.lastColumn.classList.remove('drag-over');
+        document.body.style.userSelect = '';
+        document.body.style.touchAction = '';
+        dragState = null;
+        window.removeEventListener('pointermove', onWindowPointerMove);
+        window.removeEventListener('pointerup', onWindowPointerUp);
+        window.removeEventListener('pointercancel', onWindowPointerCancel);
+    }
+
+    function commitMove(id, toDay) {
         var slotsArr = parseSlots();
         var before = JSON.parse(JSON.stringify(slotsArr));
         var toIndex = slotsArr.filter(function(s) { return s.day === toDay && s.id !== id; }).length;
@@ -151,7 +260,6 @@ var App = (function() {
 
         var beforeById = {};
         before.forEach(function(s) { beforeById[s.id] = s; });
-
         var changed = moved.filter(function(s) {
             var b = beforeById[s.id];
             return !b || b.day !== s.day || b.order !== s.order;
@@ -318,7 +426,7 @@ var App = (function() {
             var sel = t === mt ? ' selected' : '';
             return '<option value="' + t + '"' + sel + '>' + label + '</option>';
         }).join('');
-        return '<div class="slot-card" draggable="true" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
+        return '<div class="slot-card" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
             '<div class="slot-header">' +
                 '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
                 '<select class="slot-meal-type" title="Meal type">' + typeOptions + '</select>' +
