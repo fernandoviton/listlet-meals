@@ -138,6 +138,7 @@ var App = (function() {
             id: card.dataset.id,
             card: card,
             pointerId: e.pointerId,
+            captureTarget: e.target,
             startX: e.clientX,
             startY: e.clientY,
             started: false,
@@ -145,6 +146,12 @@ var App = (function() {
             lastColumn: null,
             longPressTimer: null
         };
+
+        // Capture immediately so the browser routes every move/up to us
+        // even if the finger drifts off the handle. Without this, Edge/
+        // Chromium devtools touch emulation can hand the gesture to the
+        // page scroller before our long-press fires.
+        try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
 
         if (immediate) {
             beginDrag(e);
@@ -179,8 +186,6 @@ var App = (function() {
         card.classList.add('slot-dragging');
         document.body.style.userSelect = 'none';
         document.body.style.touchAction = 'none';
-        // Capture so pointermove keeps firing during touch even if finger leaves the handle.
-        try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     }
 
     function onWindowPointerMove(e) {

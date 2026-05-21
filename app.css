@@ -157,9 +157,10 @@ body {
     min-width: 0;
     word-break: break-word;
     cursor: grab;
-    /* Let the pointerdown long-press fire on touch instead of the
-       browser hijacking it for text-selection / context menu. */
-    touch-action: manipulation;
+    /* none (not manipulation) — otherwise the browser claims the touch
+       as a page scroll before our long-press timer fires, especially
+       under Edge / Chromium devtools touch emulation. */
+    touch-action: none;
     -webkit-user-select: none;
     user-select: none;
 }
