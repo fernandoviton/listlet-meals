@@ -1,19 +1,26 @@
-// Table viewer/editor - THE REPLACEABLE FILE
-// New apps delete this and write their own App.init()
+// listlet-meals app shell. Render + event-wiring only.
+// All state transformations live in MealsCore.
 
 var App = (function() {
-    var api = null;
+    var DAYS = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
+    var DAY_LABELS = {
+        sat: 'Sat', sun: 'Sun', mon: 'Mon', tue: 'Tue',
+        wed: 'Wed', thu: 'Thu', fri: 'Fri'
+    };
+
     var container = null;
+    var api = null;
     var listName = null;
-    var savingTimeout = null;
+    var items = [];
 
     function init(el, name) {
         container = el;
         listName = name;
         api = createApi(name);
 
-        Sync.init(api, function(items) {
-            renderTable(items);
+        Sync.init(api, function(fresh) {
+            items = fresh || [];
+            render();
         });
 
         loadAndRender();
@@ -22,145 +29,66 @@ var App = (function() {
     async function loadAndRender() {
         container.innerHTML = '<div class="loading">Loading...</div>';
         try {
-            var items = await api.fetchItems();
-            renderTable(items);
+            items = await api.fetchItems();
+            render();
         } catch (err) {
             container.innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message) + '</div>';
         }
     }
 
-    function formatTimestamp(ts) {
-        if (!ts) return '';
-        return new Date(ts).toLocaleString();
+    function render() {
+        if (listName === 'library') {
+            renderLibrary();
+        } else {
+            renderWeek();
+        }
     }
 
-    function renderTable(items) {
-        if (!items) items = [];
-
-        var html = '<div class="table-editor">' +
-            '<div class="table-toolbar">' +
-                '<button class="btn btn-primary" id="addRowBtn">Add Row</button>' +
-                '<span id="syncStatus" title="Sync status"></span>' +
-            '</div>' +
-            '<table class="data-table">' +
-                '<thead><tr>' +
-                    '<th class="col-id">ID</th>' +
-                    '<th>Content</th>' +
-                    '<th class="col-timestamp">Created</th>' +
-                    '<th class="col-timestamp">Updated</th>' +
-                    '<th class="col-actions">Actions</th>' +
-                '</tr></thead>' +
-                '<tbody>';
-
+    function parseSlots() {
+        var slots = [];
         for (var i = 0; i < items.length; i++) {
-            var item = items[i];
-            var shortId = item.id ? item.id.substring(0, 8) : '';
-            html += '<tr data-id="' + escapeHtml(item.id) + '">' +
-                '<td class="col-id"><span class="id-display">' + escapeHtml(shortId) + '</span></td>' +
-                '<td>' +
-                    '<input type="text" class="table-input" value="' + escapeHtml(item.content || '') + '" data-id="' + escapeHtml(item.id) + '">' +
-                '</td>' +
-                '<td class="col-timestamp">' + escapeHtml(formatTimestamp(item.created_at)) + '</td>' +
-                '<td class="col-timestamp cell-updated-at">' + escapeHtml(formatTimestamp(item.updated_at)) + '</td>' +
-                '<td class="col-actions">' +
-                    '<button class="btn-icon delete-btn" data-id="' + escapeHtml(item.id) + '" title="Delete">&#10005;</button>' +
-                '</td>' +
-            '</tr>';
+            var parsed = MealsCore.parseContent(items[i].content);
+            if (parsed && parsed.kind === 'slot') {
+                parsed.id = items[i].id;
+                slots.push(parsed);
+            }
         }
+        return slots;
+    }
 
-        html += '</tbody></table></div>';
+    function renderWeek() {
+        var slots = parseSlots();
+
+        var html = '<div class="planner">';
+        html += '<div class="week-grid">';
+        for (var d = 0; d < DAYS.length; d++) {
+            var day = DAYS[d];
+            var daySlots = slots
+                .filter(function(s) { return s.day === day; })
+                .sort(function(a, b) { return a.order - b.order; });
+
+            html += '<div class="day-column" data-day="' + day + '">';
+            html += '<div class="day-header">' + DAY_LABELS[day] + '</div>';
+            html += '<div class="day-slots">';
+            for (var i = 0; i < daySlots.length; i++) {
+                html += renderSlotCard(daySlots[i]);
+            }
+            html += '</div>';
+            html += '<div class="day-summary" data-day="' + day + '"></div>';
+            html += '</div>';
+        }
+        html += '</div></div>';
         container.innerHTML = html;
-
-        // Bind events
-        document.getElementById('addRowBtn').addEventListener('click', addRow);
-
-        var inputs = container.querySelectorAll('.table-input');
-        for (var j = 0; j < inputs.length; j++) {
-            inputs[j].addEventListener('input', handleEdit);
-        }
-
-        var deletes = container.querySelectorAll('.delete-btn');
-        for (var k = 0; k < deletes.length; k++) {
-            deletes[k].addEventListener('click', handleDelete);
-        }
-
-        // Re-init sync status click
-        var syncEl = document.getElementById('syncStatus');
-        if (syncEl) {
-            syncEl.addEventListener('click', function() {
-                Sync.manualRefresh();
-            });
-        }
     }
 
-    async function addRow() {
-        Sync.resetActivity();
-        showSaving();
-        try {
-            await api.createItem({ content: '' });
-            var items = await api.fetchItems();
-            renderTable(items);
-            // Focus the new row's input
-            var inputs = container.querySelectorAll('.table-input');
-            if (inputs.length > 0) {
-                inputs[inputs.length - 1].focus();
-            }
-        } catch (err) {
-            console.error('Failed to add row:', err);
-        }
-        hideSaving();
+    function renderSlotCard(slot) {
+        return '<div class="slot-card" data-id="' + escapeHtml(slot.id) + '">' +
+            '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
+            '</div>';
     }
 
-    function handleEdit(e) {
-        Sync.resetActivity();
-        var id = e.target.dataset.id;
-        var value = e.target.value;
-
-        // Debounce save
-        clearTimeout(savingTimeout);
-        savingTimeout = setTimeout(async function() {
-            showSaving();
-            try {
-                var updated = await api.updateItem(id, { content: value });
-                // Update the timestamp cell without re-rendering (keeps cursor)
-                if (updated) {
-                    var tr = container.querySelector('tr[data-id="' + id + '"]');
-                    if (tr) {
-                        var tsCell = tr.querySelector('.cell-updated-at');
-                        if (tsCell) tsCell.textContent = formatTimestamp(updated.updated_at);
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to save:', err);
-            }
-            hideSaving();
-        }, 500);
-    }
-
-    async function handleDelete(e) {
-        Sync.resetActivity();
-        var id = e.target.dataset.id;
-        showSaving();
-        try {
-            await api.deleteItem(id);
-            var items = await api.fetchItems();
-            renderTable(items);
-        } catch (err) {
-            console.error('Failed to delete:', err);
-        }
-        hideSaving();
-    }
-
-    function showSaving() {
-        var el = document.getElementById('savingIndicator');
-        if (el) el.classList.add('visible');
-    }
-
-    function hideSaving() {
-        var el = document.getElementById('savingIndicator');
-        if (el) {
-            setTimeout(function() { el.classList.remove('visible'); }, 300);
-        }
+    function renderLibrary() {
+        container.innerHTML = '<div class="library"><div class="library-empty">Library — coming soon.</div></div>';
     }
 
     return {
