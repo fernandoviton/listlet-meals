@@ -219,7 +219,61 @@ var App = (function() {
     }
 
     function renderLibrary() {
-        container.innerHTML = '<div class="library"><div class="library-empty">Library — coming soon.</div></div>';
+        var html = '<div class="library">';
+        if (!items.length) {
+            html += '<div class="library-empty">No meals in library yet.</div>';
+        } else {
+            html += '<div class="library-list">';
+            for (var i = 0; i < items.length; i++) {
+                var meal = MealsCore.parseContent(items[i].content);
+                if (!meal || meal.kind !== 'meal') continue;
+                html += '<div class="library-card" data-id="' + escapeHtml(items[i].id) + '">' +
+                    '<span class="library-name">' + escapeHtml(meal.name || '(unnamed)') + '</span>' +
+                    '<button type="button" class="library-add" title="Add to week">+</button>' +
+                    '<div class="day-picker" hidden>' +
+                        DAYS.map(function(d) {
+                            return '<button type="button" class="day-pick" data-day="' + d + '">' + DAY_LABELS[d] + '</button>';
+                        }).join('') +
+                    '</div>' +
+                '</div>';
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+
+        var addBtns = container.querySelectorAll('.library-add');
+        for (var a = 0; a < addBtns.length; a++) {
+            addBtns[a].addEventListener('click', function(e) {
+                var card = e.target.closest('.library-card');
+                var picker = card.querySelector('.day-picker');
+                picker.hidden = !picker.hidden;
+            });
+        }
+        var dayBtns = container.querySelectorAll('.day-pick');
+        for (var b = 0; b < dayBtns.length; b++) {
+            dayBtns[b].addEventListener('click', onPickDay);
+        }
+    }
+
+    async function onPickDay(e) {
+        var btn = e.target;
+        var day = btn.dataset.day;
+        var card = btn.closest('.library-card');
+        var libraryItemId = card.dataset.id;
+        var libraryItem = null;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].id === libraryItemId) { libraryItem = items[i]; break; }
+        }
+        if (!libraryItem) return;
+
+        var weekApi = createApi('week');
+        var weekItems = await weekApi.fetchItems();
+        var result = MealsCore.addSlot(weekItems, libraryItem, day);
+        await weekApi.createItem({ content: result.newSlotContent });
+
+        var picker = card.querySelector('.day-picker');
+        picker.hidden = true;
     }
 
     return {
