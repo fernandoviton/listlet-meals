@@ -46,7 +46,60 @@ body {
     border-radius: 4px;
     padding: 0.4rem 0.5rem;
     font-size: 0.9rem;
+}
+
+.slot-header {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.slot-name {
+    flex: 1;
+}
+
+.slot-toggle,
+.slot-fullscreen {
+    background: transparent;
+    border: none;
     cursor: pointer;
+    color: #555;
+    padding: 0 0.2rem;
+}
+
+.slot-body {
+    margin-top: 0.4rem;
+    border-top: 1px solid #cfd8e3;
+    padding-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.slot-macros {
+    color: #555;
+    margin-bottom: 0.3rem;
+}
+
+.slot-recipe {
+    white-space: pre-wrap;
+}
+
+#recipe-dialog {
+    width: min(90vw, 600px);
+    max-height: 90vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+#recipe-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog-body {
+    padding: 1rem;
+}
+
+.dialog-close {
+    margin: 0 1rem 1rem;
 }
 
 .day-summary {
