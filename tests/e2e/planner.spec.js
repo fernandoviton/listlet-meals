@@ -61,6 +61,25 @@ test('week view renders Sat→Fri columns with seeded slots', async ({ page }) =
     await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Salad');
 });
 
+test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page }) => {
+    await seed(page, [
+        slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta' })
+    ], []);
+    await page.goto('/?list=week');
+
+    const source = page.locator('.day-column[data-day="mon"] .slot-card');
+    const target = page.locator('.day-column[data-day="wed"]');
+    await source.dragTo(target);
+
+    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Pasta');
+    await expect(page.locator('.day-column[data-day="mon"] .slot-card')).toHaveCount(0);
+
+    // Wait for debounced save then reload
+    await page.waitForTimeout(500);
+    await page.goto('/?list=week');
+    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Pasta');
+});
+
 test('card expands inline and opens full-screen modal', async ({ page }) => {
     await seed(page,
         [slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta' })],

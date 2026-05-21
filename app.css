@@ -45,6 +45,11 @@ body {
     min-height: 200px;
     display: flex;
     flex-direction: column;
+    transition: background 0.1s;
+}
+
+.day-column.drag-over {
+    background: #eaf2ff;
 }
 
 .day-header {

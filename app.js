@@ -100,6 +100,84 @@ var App = (function() {
 
         bindCardEvents();
         bindFilterEvents();
+        bindDragEvents();
+    }
+
+    var saveTimer = null;
+    function bindDragEvents() {
+        var cards = container.querySelectorAll('.slot-card');
+        for (var i = 0; i < cards.length; i++) {
+            cards[i].addEventListener('dragstart', function(e) {
+                var card = e.target.closest('.slot-card');
+                e.dataTransfer.setData('text/plain', card.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+        }
+        var columns = container.querySelectorAll('.day-column');
+        for (var j = 0; j < columns.length; j++) {
+            columns[j].addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                e.currentTarget.classList.add('drag-over');
+            });
+            columns[j].addEventListener('dragleave', function(e) {
+                e.currentTarget.classList.remove('drag-over');
+            });
+            columns[j].addEventListener('drop', onDrop);
+        }
+    }
+
+    async function onDrop(e) {
+        e.preventDefault();
+        var column = e.currentTarget;
+        column.classList.remove('drag-over');
+        var id = e.dataTransfer.getData('text/plain');
+        if (!id) return;
+        var toDay = column.dataset.day;
+
+        var slotsArr = parseSlots();
+        var before = JSON.parse(JSON.stringify(slotsArr));
+        var toIndex = slotsArr.filter(function(s) { return s.day === toDay && s.id !== id; }).length;
+        var moved = MealsCore.moveSlot(slotsArr, id, toDay, toIndex);
+
+        var beforeById = {};
+        before.forEach(function(s) { beforeById[s.id] = s; });
+
+        var changed = moved.filter(function(s) {
+            var b = beforeById[s.id];
+            return !b || b.day !== s.day || b.order !== s.order;
+        });
+
+        for (var k = 0; k < items.length; k++) {
+            var slot = MealsCore.parseContent(items[k].content);
+            if (!slot || slot.kind !== 'slot') continue;
+            for (var m = 0; m < moved.length; m++) {
+                if (moved[m].id === items[k].id) {
+                    slot.day = moved[m].day;
+                    slot.order = moved[m].order;
+                    items[k].content = MealsCore.serialize(slot);
+                    break;
+                }
+            }
+        }
+        render();
+
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async function() {
+            for (var n = 0; n < changed.length; n++) {
+                var c = changed[n];
+                var srcItem = null;
+                for (var p = 0; p < items.length; p++) {
+                    if (items[p].id === c.id) { srcItem = items[p]; break; }
+                }
+                if (!srcItem) continue;
+                try {
+                    await api.updateItem(c.id, { content: srcItem.content });
+                } catch (err) {
+                    console.error('Save failed:', err);
+                }
+            }
+        }, 300);
     }
 
     function renderFilterBar() {
@@ -150,7 +228,7 @@ var App = (function() {
     }
 
     function renderSlotCard(slot) {
-        return '<div class="slot-card" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
+        return '<div class="slot-card" draggable="true" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
             '<div class="slot-header">' +
                 '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
                 '<button type="button" class="slot-toggle" title="Expand">▾</button>' +
