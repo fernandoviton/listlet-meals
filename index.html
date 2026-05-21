@@ -55,8 +55,9 @@
 
     <!-- Init -->
     <script>
-        Auth.init(function(user) {
+        Auth.init(async function(user) {
             Header.render(document.getElementById('header'), user);
+            await App.ensureMockSeed();
             if (hasExplicitListName()) {
                 App.init(document.getElementById('app'), getListName());
             } else {
