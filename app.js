@@ -14,6 +14,7 @@ var App = (function() {
     var listName = null;
     var items = [];
     var libraryCache = null;
+    var currentFilter = 'all';
 
     function init(el, name) {
         container = el;
@@ -70,9 +71,11 @@ var App = (function() {
     }
 
     function renderWeek() {
-        var slots = parseSlots();
+        var allSlots = parseSlots();
+        var slots = MealsCore.filterSlotsByType(allSlots, currentFilter);
 
         var html = '<div class="planner">';
+        html += renderFilterBar();
         html += '<div class="week-grid">';
         for (var d = 0; d < DAYS.length; d++) {
             var day = DAYS[d];
@@ -87,7 +90,8 @@ var App = (function() {
                 html += renderSlotCard(daySlots[i]);
             }
             html += '</div>';
-            html += '<div class="day-summary" data-day="' + day + '"></div>';
+            html += '<div class="day-summary" data-day="' + day + '">' +
+                renderSummary(MealsCore.summarizeMacros(daySlots)) + '</div>';
             html += '</div>';
         }
         html += '</div></div>';
@@ -95,6 +99,44 @@ var App = (function() {
         container.innerHTML = html;
 
         bindCardEvents();
+        bindFilterEvents();
+    }
+
+    function renderFilterBar() {
+        var pills = [
+            { key: 'all', label: 'All' },
+            { key: 'breakfast', label: 'Breakfast' },
+            { key: 'lunch', label: 'Lunch' },
+            { key: 'dinner', label: 'Dinner' },
+            { key: 'snack', label: 'Snack' }
+        ];
+        var html = '<div class="filter-bar">';
+        for (var i = 0; i < pills.length; i++) {
+            var p = pills[i];
+            var cls = 'filter-pill' + (p.key === currentFilter ? ' active' : '');
+            html += '<button type="button" class="' + cls + '" data-filter="' + p.key + '">' + p.label + '</button>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function bindFilterEvents() {
+        var pills = container.querySelectorAll('.filter-pill');
+        for (var i = 0; i < pills.length; i++) {
+            pills[i].addEventListener('click', function(e) {
+                currentFilter = e.target.dataset.filter;
+                render();
+            });
+        }
+    }
+
+    function renderSummary(totals) {
+        var parts = [];
+        if (typeof totals.cal === 'number') parts.push(totals.cal + ' cal');
+        if (typeof totals.protein === 'number') parts.push(totals.protein + 'g P');
+        if (typeof totals.carbs === 'number') parts.push(totals.carbs + 'g C');
+        if (typeof totals.fat === 'number') parts.push(totals.fat + 'g F');
+        return escapeHtml(parts.join(' • '));
     }
 
     function formatMacros(m) {

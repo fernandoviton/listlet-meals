@@ -9,6 +9,28 @@ body {
     padding: 1rem;
 }
 
+.filter-bar {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filter-pill {
+    background: #fff;
+    border: 1px solid #cfd8e3;
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.filter-pill.active {
+    background: #4a6fa5;
+    color: #fff;
+    border-color: #4a6fa5;
+}
+
 .week-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
