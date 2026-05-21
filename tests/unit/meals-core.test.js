@@ -1,6 +1,70 @@
 const MealsCore = require('../../meals-core');
 
 describe('meals-core', () => {
+    describe('nextOrder', () => {
+        test('returns 0 for empty slot list', () => {
+            expect(MealsCore.nextOrder([], 'sat')).toBe(0);
+        });
+
+        test('returns max order + 1 for the given day', () => {
+            const slots = [
+                { day: 'mon', order: 0 },
+                { day: 'mon', order: 1 },
+                { day: 'mon', order: 2 }
+            ];
+            expect(MealsCore.nextOrder(slots, 'mon')).toBe(3);
+        });
+
+        test('ignores slots from other days', () => {
+            const slots = [
+                { day: 'sat', order: 5 },
+                { day: 'sun', order: 7 },
+                { day: 'mon', order: 0 }
+            ];
+            expect(MealsCore.nextOrder(slots, 'mon')).toBe(1);
+            expect(MealsCore.nextOrder(slots, 'tue')).toBe(0);
+        });
+    });
+
+    describe('addSlot', () => {
+        test('builds slot content from a library meal and day', () => {
+            const libraryMeal = {
+                id: 'lib-1',
+                content: JSON.stringify({
+                    kind: 'meal',
+                    name: 'Oatmeal',
+                    recipe: 'Cook oats.',
+                    default_meal_type: 'breakfast',
+                    macros: { cal: 300, protein: 10, carbs: 50, fat: 5 }
+                })
+            };
+            const result = MealsCore.addSlot([], libraryMeal, 'wed');
+            const parsed = JSON.parse(result.newSlotContent);
+            expect(parsed.kind).toBe('slot');
+            expect(parsed.library_id).toBe('lib-1');
+            expect(parsed.day).toBe('wed');
+            expect(parsed.meal_type).toBe('breakfast');
+            expect(parsed.order).toBe(0);
+            expect(parsed.name_snapshot).toBe('Oatmeal');
+            expect(parsed.macros_snapshot).toEqual({ cal: 300, protein: 10, carbs: 50, fat: 5 });
+        });
+
+        test('order continues from existing same-day slots', () => {
+            const weekItems = [
+                { id: 'a', content: JSON.stringify({ kind: 'slot', day: 'wed', order: 0 }) },
+                { id: 'b', content: JSON.stringify({ kind: 'slot', day: 'wed', order: 1 }) },
+                { id: 'c', content: JSON.stringify({ kind: 'slot', day: 'thu', order: 0 }) }
+            ];
+            const libraryMeal = {
+                id: 'lib-1',
+                content: JSON.stringify({ kind: 'meal', name: 'X', recipe: '', default_meal_type: 'lunch', macros: {} })
+            };
+            const result = MealsCore.addSlot(weekItems, libraryMeal, 'wed');
+            const parsed = JSON.parse(result.newSlotContent);
+            expect(parsed.order).toBe(2);
+        });
+    });
+
     describe('parseContent / serialize', () => {
         test('round-trip a library meal', () => {
             const meal = {
