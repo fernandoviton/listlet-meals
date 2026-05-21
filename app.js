@@ -324,6 +324,7 @@ var App = (function() {
                 '<select class="slot-meal-type" title="Meal type">' + typeOptions + '</select>' +
                 '<button type="button" class="slot-toggle" title="Expand">▾</button>' +
                 '<button type="button" class="slot-fullscreen" title="Full screen">⛶</button>' +
+                '<button type="button" class="slot-delete" title="Delete">✕</button>' +
             '</div>' +
             '<div class="slot-body" hidden>' +
                 '<div class="slot-macros">' + escapeHtml(formatMacros(slot.macros_snapshot)) + '</div>' +
@@ -339,9 +340,11 @@ var App = (function() {
             var toggle = card.querySelector('.slot-toggle');
             var full = card.querySelector('.slot-fullscreen');
             var select = card.querySelector('.slot-meal-type');
+            var del = card.querySelector('.slot-delete');
             toggle.addEventListener('click', onToggleExpand);
             full.addEventListener('click', onOpenModal);
             if (select) select.addEventListener('change', onMealTypeChange);
+            if (del) del.addEventListener('click', onDeleteSlot);
         }
         var dialog = document.getElementById('recipe-dialog');
         if (dialog) {
@@ -350,6 +353,44 @@ var App = (function() {
             dialog.addEventListener('click', function(e) {
                 if (e.target === dialog) dialog.close();
             });
+        }
+    }
+
+    async function onDeleteSlot(e) {
+        var card = e.target.closest('.slot-card');
+        if (!card) return;
+        var id = card.dataset.id;
+        var name = card.querySelector('.slot-name').textContent;
+        if (!window.confirm('Delete "' + name + '" from the week?')) return;
+
+        var slotsArr = parseSlots();
+        var afterRemove = MealsCore.removeSlot(slotsArr, id);
+        var newOrderById = {};
+        afterRemove.forEach(function(s) { newOrderById[s.id] = s.order; });
+
+        var changed = [];
+        var nextItems = [];
+        for (var k = 0; k < items.length; k++) {
+            if (items[k].id === id) continue;
+            var parsed = MealsCore.parseContent(items[k].content);
+            if (parsed && parsed.kind === 'slot' && typeof newOrderById[items[k].id] === 'number'
+                && parsed.order !== newOrderById[items[k].id]) {
+                parsed.order = newOrderById[items[k].id];
+                items[k].content = MealsCore.serialize(parsed);
+                changed.push({ id: items[k].id, content: items[k].content });
+            }
+            nextItems.push(items[k]);
+        }
+        items = nextItems;
+        render();
+
+        try {
+            await api.deleteItem(id);
+            for (var c = 0; c < changed.length; c++) {
+                await api.updateItem(changed[c].id, { content: changed[c].content });
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
         }
     }
 

@@ -142,16 +142,20 @@ body {
     border-radius: 4px;
     padding: 0.4rem 0.5rem;
     font-size: 0.9rem;
+    overflow: hidden;
 }
 
 .slot-header {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    flex-wrap: wrap;
 }
 
 .slot-name {
-    flex: 1;
+    flex: 1 1 100%;
+    min-width: 0;
+    word-break: break-word;
 }
 
 .slot-meal-type {
@@ -163,12 +167,17 @@ body {
 }
 
 .slot-toggle,
-.slot-fullscreen {
+.slot-fullscreen,
+.slot-delete {
     background: transparent;
     border: none;
     cursor: pointer;
     color: #555;
     padding: 0 0.2rem;
+}
+
+.slot-delete:hover {
+    color: #c0392b;
 }
 
 .slot-body {

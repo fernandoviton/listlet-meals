@@ -74,6 +74,24 @@ var MealsCore = (function() {
         return copy;
     }
 
+    function removeSlot(slots, id) {
+        var removed = null;
+        var kept = [];
+        for (var i = 0; i < slots.length; i++) {
+            if (slots[i].id === id) {
+                removed = slots[i];
+            } else {
+                kept.push(Object.assign({}, slots[i]));
+            }
+        }
+        if (!removed) return kept;
+        var sameDay = kept
+            .filter(function(s) { return s.day === removed.day; })
+            .sort(function(a, b) { return a.order - b.order; });
+        sameDay.forEach(function(s, idx) { s.order = idx; });
+        return kept;
+    }
+
     function setMealType(slots, id, mealType) {
         return slots.map(function(s) {
             var copy = Object.assign({}, s);
@@ -137,6 +155,7 @@ var MealsCore = (function() {
         nextOrder: nextOrder,
         addSlot: addSlot,
         moveSlot: moveSlot,
+        removeSlot: removeSlot,
         setMealType: setMealType,
         summarizeMacros: summarizeMacros,
         summarizeLibrary: summarizeLibrary,

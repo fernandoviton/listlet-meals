@@ -158,6 +158,46 @@ describe('meals-core', () => {
         });
     });
 
+    describe('removeSlot', () => {
+        function s(id, day, order) { return { id: id, day: day, order: order }; }
+
+        test('removes the slot from the list', () => {
+            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const out = MealsCore.removeSlot(slots, 'a');
+            expect(out.map(x => x.id)).toEqual(['b']);
+        });
+
+        test('compacts order within the source day', () => {
+            const slots = [s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2)];
+            const out = MealsCore.removeSlot(slots, 'b');
+            const mon = out.filter(x => x.day === 'mon').sort((a, b) => a.order - b.order);
+            expect(mon.map(x => x.id)).toEqual(['a', 'c']);
+            expect(mon.map(x => x.order)).toEqual([0, 1]);
+        });
+
+        test('leaves other days alone', () => {
+            const slots = [s('a', 'mon', 0), s('b', 'mon', 1), s('x', 'tue', 0), s('y', 'tue', 1)];
+            const out = MealsCore.removeSlot(slots, 'a');
+            const tue = out.filter(x => x.day === 'tue').sort((a, b) => a.order - b.order);
+            expect(tue.map(x => x.id)).toEqual(['x', 'y']);
+            expect(tue.map(x => x.order)).toEqual([0, 1]);
+        });
+
+        test('unknown id returns an equivalent copy', () => {
+            const slots = [s('a', 'mon', 0)];
+            const out = MealsCore.removeSlot(slots, 'missing');
+            expect(out).toEqual(slots);
+            expect(out).not.toBe(slots);
+        });
+
+        test('is pure (does not mutate input)', () => {
+            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const copy = JSON.parse(JSON.stringify(slots));
+            MealsCore.removeSlot(slots, 'a');
+            expect(slots).toEqual(copy);
+        });
+    });
+
     describe('setMealType', () => {
         function s(id, day, order, mealType) {
             return { id: id, day: day, order: order, meal_type: mealType };
