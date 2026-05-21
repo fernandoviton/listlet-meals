@@ -74,6 +74,14 @@ var MealsCore = (function() {
         return copy;
     }
 
+    function setMealType(slots, id, mealType) {
+        return slots.map(function(s) {
+            var copy = Object.assign({}, s);
+            if (copy.id === id) copy.meal_type = mealType;
+            return copy;
+        });
+    }
+
     function summarizeMacros(slots) {
         var keys = ['cal', 'protein', 'carbs', 'fat'];
         var totals = { cal: 0, protein: 0, carbs: 0, fat: 0 };
@@ -129,6 +137,7 @@ var MealsCore = (function() {
         nextOrder: nextOrder,
         addSlot: addSlot,
         moveSlot: moveSlot,
+        setMealType: setMealType,
         summarizeMacros: summarizeMacros,
         summarizeLibrary: summarizeLibrary,
         filterSlotsByType: filterSlotsByType

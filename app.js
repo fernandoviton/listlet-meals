@@ -311,9 +311,17 @@ var App = (function() {
     }
 
     function renderSlotCard(slot) {
+        var mt = slot.meal_type || 'dinner';
+        var types = ['breakfast', 'lunch', 'dinner', 'snack'];
+        var typeOptions = types.map(function(t) {
+            var label = t.charAt(0).toUpperCase() + t.slice(1);
+            var sel = t === mt ? ' selected' : '';
+            return '<option value="' + t + '"' + sel + '>' + label + '</option>';
+        }).join('');
         return '<div class="slot-card" draggable="true" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
             '<div class="slot-header">' +
                 '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
+                '<select class="slot-meal-type" title="Meal type">' + typeOptions + '</select>' +
                 '<button type="button" class="slot-toggle" title="Expand">▾</button>' +
                 '<button type="button" class="slot-fullscreen" title="Full screen">⛶</button>' +
             '</div>' +
@@ -330,8 +338,10 @@ var App = (function() {
             var card = cards[i];
             var toggle = card.querySelector('.slot-toggle');
             var full = card.querySelector('.slot-fullscreen');
+            var select = card.querySelector('.slot-meal-type');
             toggle.addEventListener('click', onToggleExpand);
             full.addEventListener('click', onOpenModal);
+            if (select) select.addEventListener('change', onMealTypeChange);
         }
         var dialog = document.getElementById('recipe-dialog');
         if (dialog) {
@@ -340,6 +350,27 @@ var App = (function() {
             dialog.addEventListener('click', function(e) {
                 if (e.target === dialog) dialog.close();
             });
+        }
+    }
+
+    async function onMealTypeChange(e) {
+        var card = e.target.closest('.slot-card');
+        if (!card) return;
+        var id = card.dataset.id;
+        var mealType = e.target.value;
+        for (var k = 0; k < items.length; k++) {
+            if (items[k].id !== id) continue;
+            var slot = MealsCore.parseContent(items[k].content);
+            if (!slot || slot.kind !== 'slot') return;
+            slot.meal_type = mealType;
+            items[k].content = MealsCore.serialize(slot);
+            render();
+            try {
+                await api.updateItem(id, { content: items[k].content });
+            } catch (err) {
+                console.error('Meal type save failed:', err);
+            }
+            return;
         }
     }
 

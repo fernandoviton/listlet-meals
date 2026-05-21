@@ -154,6 +154,14 @@ body {
     flex: 1;
 }
 
+.slot-meal-type {
+    font-size: 0.75rem;
+    border: 1px solid #cfd8e3;
+    background: #fff;
+    border-radius: 3px;
+    padding: 0.05rem 0.2rem;
+}
+
 .slot-toggle,
 .slot-fullscreen {
     background: transparent;

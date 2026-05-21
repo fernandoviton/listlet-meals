@@ -158,6 +158,33 @@ describe('meals-core', () => {
         });
     });
 
+    describe('setMealType', () => {
+        function s(id, day, order, mealType) {
+            return { id: id, day: day, order: order, meal_type: mealType };
+        }
+
+        test('updates meal_type of the targeted slot only', () => {
+            const slots = [s('a', 'mon', 0, 'breakfast'), s('b', 'mon', 1, 'lunch')];
+            const out = MealsCore.setMealType(slots, 'b', 'snack');
+            expect(out.find(x => x.id === 'a').meal_type).toBe('breakfast');
+            expect(out.find(x => x.id === 'b').meal_type).toBe('snack');
+        });
+
+        test('is pure (does not mutate input)', () => {
+            const slots = [s('a', 'mon', 0, 'lunch')];
+            const copy = JSON.parse(JSON.stringify(slots));
+            MealsCore.setMealType(slots, 'a', 'dinner');
+            expect(slots).toEqual(copy);
+        });
+
+        test('unknown id returns an equivalent copy', () => {
+            const slots = [s('a', 'mon', 0, 'lunch')];
+            const out = MealsCore.setMealType(slots, 'missing', 'snack');
+            expect(out).toEqual(slots);
+            expect(out).not.toBe(slots);
+        });
+    });
+
     describe('summarizeLibrary', () => {
         test('empty input returns empty array', () => {
             expect(MealsCore.summarizeLibrary([])).toEqual([]);
