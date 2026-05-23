@@ -23,9 +23,8 @@ var WeekView = (function() {
     var currentFilter = 'all';
     var saveTimer = null;
 
-    var LONG_PRESS_MS = 300;
-    var MOVE_THRESHOLD_PX = 10;
     var dragState = null;
+    var suppressNextClick = false;
 
     function init(el, listApi) {
         container = el;
@@ -138,18 +137,30 @@ var WeekView = (function() {
         bindDialogEvents();
     }
 
-    /* ===== Pointer / drag-vs-tap ===== */
+    /* ===== Pointer (drag from handle) + click (open modal) ===== */
 
     function bindCardEvents() {
         var cards = container.querySelectorAll('.slot-card');
         for (var i = 0; i < cards.length; i++) {
-            cards[i].addEventListener('pointerdown', onCardPointerDown);
+            cards[i].addEventListener('click', onCardClick);
+            var grab = cards[i].querySelector('.slot-grab');
+            if (grab) grab.addEventListener('pointerdown', onGrabPointerDown);
         }
     }
 
-    function onCardPointerDown(e) {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
+    function onCardClick(e) {
+        if (e.target.closest('.slot-grab')) return;
+        if (suppressNextClick) { suppressNextClick = false; return; }
         var card = e.currentTarget;
+        openRecipeModal(card.dataset.id, card.dataset.libraryId,
+            card.querySelector('.slot-name').textContent);
+    }
+
+    function onGrabPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        var card = e.currentTarget.closest('.slot-card');
+        if (!card) return;
 
         dragState = {
             id: card.dataset.id,
@@ -157,22 +168,13 @@ var WeekView = (function() {
             card: card,
             pointerId: e.pointerId,
             captureTarget: e.target,
-            startX: e.clientX,
-            startY: e.clientY,
-            started: false,
             ghost: null,
-            lastSection: null,
-            longPressTimer: null,
-            isTouch: e.pointerType !== 'mouse'
+            lastSection: null
         };
 
         try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
 
-        if (dragState.isTouch) {
-            dragState.longPressTimer = setTimeout(function() {
-                if (dragState && !dragState.started) beginDrag(dragState.startX, dragState.startY);
-            }, LONG_PRESS_MS);
-        }
+        beginDrag(e.clientX, e.clientY);
 
         window.addEventListener('pointermove', onWindowPointerMove);
         window.addEventListener('pointerup', onWindowPointerUp);
@@ -181,7 +183,6 @@ var WeekView = (function() {
 
     function beginDrag(x, y) {
         if (!dragState) return;
-        dragState.started = true;
         var card = dragState.card;
         var rect = card.getBoundingClientRect();
         var ghost = card.cloneNode(true);
@@ -203,20 +204,6 @@ var WeekView = (function() {
 
     function onWindowPointerMove(e) {
         if (!dragState || e.pointerId !== dragState.pointerId) return;
-
-        if (!dragState.started) {
-            var dx = e.clientX - dragState.startX;
-            var dy = e.clientY - dragState.startY;
-            if (Math.sqrt(dx * dx + dy * dy) > MOVE_THRESHOLD_PX) {
-                if (dragState.isTouch) {
-                    // Touch move before long-press = scroll intent; cancel.
-                    cleanupDrag();
-                } else {
-                    beginDrag(e.clientX, e.clientY);
-                }
-            }
-            return;
-        }
 
         var g = dragState.ghost;
         g.style.left = (e.clientX - dragState.offsetX) + 'px';
@@ -248,19 +235,10 @@ var WeekView = (function() {
 
     function onWindowPointerUp(e) {
         if (!dragState || e.pointerId !== dragState.pointerId) return;
-        if (!dragState.started) {
-            var id = dragState.id;
-            var libraryId = dragState.libraryId;
-            var name = dragState.card.querySelector('.slot-name').textContent;
-            cleanupDrag();
-            openRecipeModal(id, libraryId, name);
-            return;
-        }
-
         var section = sectionAtPoint(e.clientX, e.clientY);
         var movedId = dragState.id;
+        suppressNextClick = true;
         cleanupDrag();
-
         if (!section) return;
         commitMove(movedId, section.dataset.day, section.dataset.mealType);
     }
@@ -272,7 +250,6 @@ var WeekView = (function() {
 
     function cleanupDrag() {
         if (!dragState) return;
-        if (dragState.longPressTimer) clearTimeout(dragState.longPressTimer);
         if (dragState.ghost && dragState.ghost.parentNode) {
             dragState.ghost.parentNode.removeChild(dragState.ghost);
         }
@@ -536,9 +513,15 @@ var WeekView = (function() {
             ' data-id="' + escapeHtml(slot.id) + '"' +
             ' data-library-id="' + escapeHtml(slot.library_id || '') + '"' +
             ' data-meal-type="' + escapeHtml(slot.meal_type || 'dinner') + '"' +
+            ' role="button" tabindex="0"' +
             '>' +
-            '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
-            '<span class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(slot.macros_snapshot)) + '</span>' +
+            '<div class="slot-text">' +
+                '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
+                '<span class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(slot.macros_snapshot)) + '</span>' +
+            '</div>' +
+            '<button type="button" class="slot-grab" aria-label="Drag to reorder" tabindex="-1">' +
+                '<span></span><span></span><span></span>' +
+            '</button>' +
             '</div>';
     }
 

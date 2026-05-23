@@ -50,9 +50,9 @@ test('dragging a slot to a different meal-type section updates meal_type and per
     await seed(page, [slotItem('s1', 'mon', 0, 'Pasta', 'dinner')]);
     await page.goto('/?list=week');
 
-    const card = page.locator('.day-column[data-day="mon"] .slot-card');
+    const grab = page.locator('.day-column[data-day="mon"] .slot-card .slot-grab');
     const lunchSection = page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"]');
-    await card.dragTo(lunchSection);
+    await grab.dragTo(lunchSection);
 
     // Card now lives in the lunch section.
     await expect(

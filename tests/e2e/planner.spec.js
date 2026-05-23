@@ -67,7 +67,7 @@ test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page
     ], []);
     await page.goto('/?list=week');
 
-    const source = page.locator('.day-column[data-day="mon"] .slot-card .slot-name');
+    const source = page.locator('.day-column[data-day="mon"] .slot-card .slot-grab');
     const target = page.locator('.day-column[data-day="wed"]');
     await source.dragTo(target);
 
@@ -91,7 +91,7 @@ test('clicking a slot card opens the recipe modal', async ({ page }) => {
     const dialog = page.locator('#recipe-dialog');
     await expect(dialog).not.toHaveAttribute('open', '');
 
-    await card.click();
+    await card.locator('.slot-name').click();
     await expect(dialog).toHaveAttribute('open', '');
     await expect(dialog.locator('h2')).toHaveText('Pasta');
     await expect(dialog.locator('.dialog-recipe')).toHaveText('Boil water. Add pasta. Drain.');

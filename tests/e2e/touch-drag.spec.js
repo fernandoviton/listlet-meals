@@ -43,11 +43,12 @@ async function seed(page, week) {
     }, week);
 }
 
-// Dispatch a synthetic touch-typed pointer-event sequence: a long press
-// (holdMs > LONG_PRESS_MS in app.js) then a drag to (tx, ty).
+// Dispatch a synthetic touch-typed pointer-event sequence: pointerdown on
+// the slot-card's grab handle, then drag to the target. No long-press —
+// drag begins immediately on pointerdown on .slot-grab.
 async function touchDrag(page, fromSelector, toSelector, opts) {
     opts = opts || {};
-    const holdMs = opts.holdMs == null ? 400 : opts.holdMs;
+    const holdMs = opts.holdMs == null ? 20 : opts.holdMs;
     await page.evaluate(async ({ fromSelector, toSelector, holdMs }) => {
         // Pull the source to top so the destination is also reachable
         // within the viewport on mobile (where columns stack vertically).
@@ -73,8 +74,14 @@ async function touchDrag(page, fromSelector, toSelector, opts) {
         }
         const from = center(fromSelector);
         const to = center(toSelector);
-        const handle = from.el.querySelector('.slot-name') || from.el;
-        fire(handle, 'pointerdown', from.x, from.y);
+        // Always grab via .slot-grab. The handle's center may differ from
+        // the card's center, so use the handle's own rect for pointerdown.
+        const handle = from.el.querySelector('.slot-grab');
+        if (!handle) throw new Error('no .slot-grab in source card');
+        const hr = handle.getBoundingClientRect();
+        const hx = hr.left + hr.width / 2;
+        const hy = hr.top + hr.height / 2;
+        fire(handle, 'pointerdown', hx, hy);
         await new Promise(r => setTimeout(r, holdMs));
         const steps = 8;
         for (let i = 1; i <= steps; i++) {
@@ -87,7 +94,7 @@ async function touchDrag(page, fromSelector, toSelector, opts) {
     }, { fromSelector, toSelector, holdMs });
 }
 
-test('long-press touch-drag moves a slot from Mon to Wed and persists', async ({ page }) => {
+test('touch-drag from the grab handle moves a slot from Mon to Wed and persists', async ({ page }) => {
     await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')]);
     await page.goto('/?list=week');
 
@@ -103,17 +110,16 @@ test('long-press touch-drag moves a slot from Mon to Wed and persists', async ({
     await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText(['Pasta']);
 });
 
-test('tap without long-press does NOT start a drag', async ({ page }) => {
+test('tapping the card body (not the handle) opens the recipe modal and does NOT move the slot', async ({ page }) => {
     await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')]);
     await page.goto('/?list=week');
 
-    // Quick "tap then move" — under the long-press threshold, with motion that
-    // exceeds the move-cancel distance — should leave the slot in place.
-    await touchDrag(page,
-        '.day-column[data-day="mon"] .slot-card',
-        '.day-column[data-day="wed"]',
-        { holdMs: 50 });
+    // Tap the slot-name (card body), not the grab handle — should open the
+    // recipe modal and leave the slot in Mon.
+    const name = page.locator('.day-column[data-day="mon"] .slot-card .slot-name');
+    await name.tap();
 
+    await expect(page.locator('#recipe-dialog')).toHaveAttribute('open', '');
     await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText(['Pasta']);
     await expect(page.locator('.day-column[data-day="wed"] .slot-card')).toHaveCount(0);
 });

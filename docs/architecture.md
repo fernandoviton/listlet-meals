@@ -118,11 +118,11 @@ Each day column renders four meal-type sections (`breakfast`, `lunch`, `dinner`,
 
 ### Slot card interactions
 
-The slot card is a single tap target with no buttons. Tapping (pointerdown → pointerup with movement under the threshold) opens the recipe modal, which contains the meal name, macros, recipe, and a destructive **Delete** action. Drag changes both day and meal_type by dropping into a target `.meal-section`.
+The slot card has two affordances: the card body opens the recipe modal on `click`, and a small iOS-style `.slot-grab` handle on the right starts a drag on `pointerdown`. The modal contains the meal name, macros, recipe, and a destructive **Delete** action. Drag changes both day and meal_type by dropping into a target `.meal-section`.
 
 ### Drag-and-drop
 
-Pointer-based, works on mouse and touch. Touch / pen requires a 300 ms long-press and cancels if the pointer moves >10 px before the timer fires (treated as a scroll). Mouse drag begins once the pointer crosses the same 10 px threshold — a mousedown/up under that threshold is treated as a tap and opens the modal. Pointer capture is taken on `pointerdown` so the gesture survives the finger drifting off the card. A floating ghost element follows the pointer; `elementFromPoint` (with the ghost briefly hidden) resolves the nearest `.meal-section` (falling back to the column + the slot's current meal_type if dropped outside any section). Commit goes through `MealsCore.moveSlot(id, day, mealType, index)` and a debounced batch of `api.updateItem` calls.
+Pointer-based, works on mouse and touch alike, no gesture timing. `pointerdown` on `.slot-grab` immediately begins the drag (no long-press, no movement threshold). `.slot-grab` is the only element with `touch-action: none`, so the browser does not steal the gesture for scrolling — the rest of the card scrolls normally. Pointer capture is taken on `pointerdown` so the gesture survives the finger drifting off the handle. A floating ghost element follows the pointer; `elementFromPoint` (with the ghost briefly hidden) resolves the nearest `.meal-section` (falling back to the column + the slot's current meal_type if dropped outside any section). On `pointerup` a flag suppresses the synthesized `click` so the modal does not open after a drag. Commit goes through `MealsCore.moveSlot(id, day, mealType, index)` and a debounced batch of `api.updateItem` calls.
 
 ### Library card interactions
 
