@@ -4,7 +4,7 @@ A weekly meal planner built on the listlet-shared starter kit.
 
 ## Working Agreement
 
-- **TDD anything unit-testable.** Write the failing Jest test first, then implement until green. DOM/glue logic is covered by Playwright E2E only.
+- **TDD whenever there's a test that can fail first.** For pure logic, write the failing Jest test before implementing. For DOM/glue changes, write or update the Playwright E2E spec and confirm it fails before touching `app.js` / `app.css`. Only skip TDD when no test can meaningfully assert the change (pure styling tweaks, copy edits).
 - **Code split.** All state transformations live in `meals-core.js` (pure functions, no DOM, no `window`). `app.js` is a thin render/event-wiring layer. Never put business logic in `app.js`.
 - **Do not edit `shared/`.** It is the upstream starter kit. All meal-specific data is JSON-encoded into the shared `content` column.
 
