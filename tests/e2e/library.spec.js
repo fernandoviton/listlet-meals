@@ -39,10 +39,10 @@ test('library shows name, macros, and expandable recipe (no add-to-week UI)', as
     var recipe = page.locator('.library-card .library-recipe');
     await expect(recipe).toBeHidden();
 
-    await page.locator('.library-card .library-toggle').click();
+    await page.locator('.library-card').click();
     await expect(recipe).toBeVisible();
     await expect(recipe).toContainText('Boil water.');
 
-    await page.locator('.library-card .library-toggle').click();
+    await page.locator('.library-card').click();
     await expect(recipe).toBeHidden();
 });

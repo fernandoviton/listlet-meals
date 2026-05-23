@@ -7,6 +7,13 @@ var WeekView = (function() {
         sat: 'Sat', sun: 'Sun', mon: 'Mon', tue: 'Tue',
         wed: 'Wed', thu: 'Thu', fri: 'Fri'
     };
+    var MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
+    var MEAL_TYPE_LABELS = {
+        breakfast: 'Breakfast',
+        lunch:     'Lunch',
+        dinner:    'Dinner',
+        snack:     'Snack'
+    };
 
     var container = null;
     var api = null;
@@ -17,7 +24,7 @@ var WeekView = (function() {
     var saveTimer = null;
 
     var LONG_PRESS_MS = 300;
-    var MOVE_CANCEL_PX = 10;
+    var MOVE_THRESHOLD_PX = 10;
     var dragState = null;
 
     function init(el, listApi) {
@@ -65,35 +72,59 @@ var WeekView = (function() {
         return slots;
     }
 
+    function visibleMealTypes() {
+        if (currentFilter === 'all') return MEAL_TYPES.slice();
+        return [currentFilter];
+    }
+
     function render() {
         var allSlots = parseSlots();
         var slots = MealsCore.filterSlotsByType(allSlots, currentFilter);
+        var mealTypes = visibleMealTypes();
 
         var html = '<div class="planner">';
         html += renderFilterBar();
         html += '<div class="week-grid">';
         for (var d = 0; d < DAYS.length; d++) {
             var day = DAYS[d];
-            var daySlots = slots
-                .filter(function(s) { return s.day === day; })
-                .sort(function(a, b) { return a.order - b.order; });
+            var daySlots = slots.filter(function(s) { return s.day === day; });
 
             html += '<div class="day-column" data-day="' + day + '">';
             html += '<div class="day-header">' +
                 '<span class="day-label">' + DAY_LABELS[day] + '</span>' +
-                '<button type="button" class="day-add" data-day="' + day + '" title="Add meal">+</button>' +
+                '<button type="button" class="day-add" data-day="' + day + '" title="Add meal" aria-label="Add meal to ' + DAY_LABELS[day] + '">+</button>' +
                 '</div>';
-            html += '<div class="day-slots">';
-            for (var i = 0; i < daySlots.length; i++) {
-                html += renderSlotCard(daySlots[i]);
+
+            html += '<div class="day-sections">';
+            for (var t = 0; t < mealTypes.length; t++) {
+                var mt = mealTypes[t];
+                var sectionSlots = daySlots
+                    .filter(function(s) { return s.meal_type === mt; })
+                    .sort(function(a, b) { return a.order - b.order; });
+
+                html += '<div class="meal-section" data-day="' + day + '" data-meal-type="' + mt + '">';
+                html += '<div class="section-label">' + MEAL_TYPE_LABELS[mt] + '</div>';
+                html += '<div class="section-slots">';
+                for (var i = 0; i < sectionSlots.length; i++) {
+                    html += renderSlotCard(sectionSlots[i]);
+                }
+                html += '</div>';
+                html += '</div>';
             }
             html += '</div>';
+
             html += '<div class="day-summary" data-day="' + day + '">' +
                 renderSummary(MealsCore.summarizeMacros(daySlots)) + '</div>';
             html += '</div>';
         }
         html += '</div></div>';
-        html += '<dialog id="recipe-dialog"><div class="dialog-body"></div><button class="dialog-close" type="button">Close</button></dialog>';
+        html += '<dialog id="recipe-dialog">' +
+            '<div class="dialog-body"></div>' +
+            '<div class="dialog-actions">' +
+                '<button class="dialog-delete" type="button">Delete</button>' +
+                '<button class="dialog-close" type="button">Close</button>' +
+            '</div>' +
+            '</dialog>';
         html += '<dialog id="picker-dialog">' +
             '<div class="picker-header">Add meal to <span class="picker-day"></span></div>' +
             '<div class="picker-body"></div>' +
@@ -103,26 +134,26 @@ var WeekView = (function() {
 
         bindCardEvents();
         bindFilterEvents();
-        bindDragEvents();
         bindAddDayEvents();
+        bindDialogEvents();
     }
 
-    function bindDragEvents() {
-        var handles = container.querySelectorAll('.slot-card .slot-name');
-        for (var i = 0; i < handles.length; i++) {
-            handles[i].addEventListener('pointerdown', onHandlePointerDown);
+    /* ===== Pointer / drag-vs-tap ===== */
+
+    function bindCardEvents() {
+        var cards = container.querySelectorAll('.slot-card');
+        for (var i = 0; i < cards.length; i++) {
+            cards[i].addEventListener('pointerdown', onCardPointerDown);
         }
     }
 
-    function onHandlePointerDown(e) {
+    function onCardPointerDown(e) {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        var card = e.target.closest('.slot-card');
-        if (!card) return;
-
-        var immediate = e.pointerType === 'mouse';
+        var card = e.currentTarget;
 
         dragState = {
             id: card.dataset.id,
+            libraryId: card.dataset.libraryId,
             card: card,
             pointerId: e.pointerId,
             captureTarget: e.target,
@@ -130,17 +161,16 @@ var WeekView = (function() {
             startY: e.clientY,
             started: false,
             ghost: null,
-            lastColumn: null,
-            longPressTimer: null
+            lastSection: null,
+            longPressTimer: null,
+            isTouch: e.pointerType !== 'mouse'
         };
 
         try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
 
-        if (immediate) {
-            beginDrag(e);
-        } else {
+        if (dragState.isTouch) {
             dragState.longPressTimer = setTimeout(function() {
-                if (dragState && !dragState.started) beginDrag(e);
+                if (dragState && !dragState.started) beginDrag(dragState.startX, dragState.startY);
             }, LONG_PRESS_MS);
         }
 
@@ -149,7 +179,7 @@ var WeekView = (function() {
         window.addEventListener('pointercancel', onWindowPointerCancel);
     }
 
-    function beginDrag(e) {
+    function beginDrag(x, y) {
         if (!dragState) return;
         dragState.started = true;
         var card = dragState.card;
@@ -164,8 +194,8 @@ var WeekView = (function() {
         ghost.style.zIndex = '9999';
         document.body.appendChild(ghost);
         dragState.ghost = ghost;
-        dragState.offsetX = e.clientX - rect.left;
-        dragState.offsetY = e.clientY - rect.top;
+        dragState.offsetX = x - rect.left;
+        dragState.offsetY = y - rect.top;
         card.classList.add('slot-dragging');
         document.body.style.userSelect = 'none';
         document.body.style.touchAction = 'none';
@@ -177,8 +207,13 @@ var WeekView = (function() {
         if (!dragState.started) {
             var dx = e.clientX - dragState.startX;
             var dy = e.clientY - dragState.startY;
-            if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
-                cleanupDrag();
+            if (Math.sqrt(dx * dx + dy * dy) > MOVE_THRESHOLD_PX) {
+                if (dragState.isTouch) {
+                    // Touch move before long-press = scroll intent; cancel.
+                    cleanupDrag();
+                } else {
+                    beginDrag(e.clientX, e.clientY);
+                }
             }
             return;
         }
@@ -187,34 +222,47 @@ var WeekView = (function() {
         g.style.left = (e.clientX - dragState.offsetX) + 'px';
         g.style.top = (e.clientY - dragState.offsetY) + 'px';
 
-        var col = columnAtPoint(e.clientX, e.clientY);
-        if (col !== dragState.lastColumn) {
-            if (dragState.lastColumn) dragState.lastColumn.classList.remove('drag-over');
-            if (col) col.classList.add('drag-over');
-            dragState.lastColumn = col;
+        var section = sectionAtPoint(e.clientX, e.clientY);
+        if (section !== dragState.lastSection) {
+            if (dragState.lastSection) dragState.lastSection.classList.remove('drag-over');
+            if (section) section.classList.add('drag-over');
+            dragState.lastSection = section;
         }
     }
 
-    function columnAtPoint(x, y) {
+    function sectionAtPoint(x, y) {
         var g = dragState && dragState.ghost;
         if (g) g.style.display = 'none';
         var el = document.elementFromPoint(x, y);
         if (g) g.style.display = '';
         if (!el) return null;
-        return el.closest('.day-column');
+        var section = el.closest('.meal-section');
+        if (section) return section;
+        // Fallback: dropped on the column outside any section — use the slot's
+        // current meal-type within that column, so a coarse drop still works.
+        var col = el.closest('.day-column');
+        if (!col) return null;
+        var mt = (dragState && dragState.card && dragState.card.dataset.mealType) || 'dinner';
+        return col.querySelector('.meal-section[data-meal-type="' + mt + '"]');
     }
 
     function onWindowPointerUp(e) {
         if (!dragState || e.pointerId !== dragState.pointerId) return;
-        if (!dragState.started) { cleanupDrag(); return; }
+        if (!dragState.started) {
+            var id = dragState.id;
+            var libraryId = dragState.libraryId;
+            var name = dragState.card.querySelector('.slot-name').textContent;
+            cleanupDrag();
+            openRecipeModal(id, libraryId, name);
+            return;
+        }
 
-        var col = columnAtPoint(e.clientX, e.clientY);
-        var id = dragState.id;
+        var section = sectionAtPoint(e.clientX, e.clientY);
+        var movedId = dragState.id;
         cleanupDrag();
 
-        if (!col) return;
-        var toDay = col.dataset.day;
-        commitMove(id, toDay);
+        if (!section) return;
+        commitMove(movedId, section.dataset.day, section.dataset.mealType);
     }
 
     function onWindowPointerCancel(e) {
@@ -229,7 +277,7 @@ var WeekView = (function() {
             dragState.ghost.parentNode.removeChild(dragState.ghost);
         }
         if (dragState.card) dragState.card.classList.remove('slot-dragging');
-        if (dragState.lastColumn) dragState.lastColumn.classList.remove('drag-over');
+        if (dragState.lastSection) dragState.lastSection.classList.remove('drag-over');
         document.body.style.userSelect = '';
         document.body.style.touchAction = '';
         dragState = null;
@@ -238,17 +286,19 @@ var WeekView = (function() {
         window.removeEventListener('pointercancel', onWindowPointerCancel);
     }
 
-    function commitMove(id, toDay) {
+    function commitMove(id, toDay, toMealType) {
         var slotsArr = parseSlots();
         var before = JSON.parse(JSON.stringify(slotsArr));
-        var toIndex = slotsArr.filter(function(s) { return s.day === toDay && s.id !== id; }).length;
-        var moved = MealsCore.moveSlot(slotsArr, id, toDay, toIndex);
+        var toIndex = slotsArr.filter(function(s) {
+            return s.day === toDay && s.meal_type === toMealType && s.id !== id;
+        }).length;
+        var moved = MealsCore.moveSlot(slotsArr, id, toDay, toMealType, toIndex);
 
         var beforeById = {};
         before.forEach(function(s) { beforeById[s.id] = s; });
         var changed = moved.filter(function(s) {
             var b = beforeById[s.id];
-            return !b || b.day !== s.day || b.order !== s.order;
+            return !b || b.day !== s.day || b.meal_type !== s.meal_type || b.order !== s.order;
         });
 
         for (var k = 0; k < items.length; k++) {
@@ -257,6 +307,7 @@ var WeekView = (function() {
             for (var m = 0; m < moved.length; m++) {
                 if (moved[m].id === items[k].id) {
                     slot.day = moved[m].day;
+                    slot.meal_type = moved[m].meal_type;
                     slot.order = moved[m].order;
                     items[k].content = MealsCore.serialize(slot);
                     break;
@@ -282,6 +333,8 @@ var WeekView = (function() {
             }
         }, 300);
     }
+
+    /* ===== Filter bar ===== */
 
     function renderFilterBar() {
         var pills = [
@@ -311,17 +364,12 @@ var WeekView = (function() {
         }
     }
 
+    /* ===== Picker (add to day) ===== */
+
     function bindAddDayEvents() {
         var addBtns = container.querySelectorAll('.day-add');
         for (var i = 0; i < addBtns.length; i++) {
             addBtns[i].addEventListener('click', onOpenPicker);
-        }
-        var dialog = document.getElementById('picker-dialog');
-        if (dialog) {
-            dialog.querySelector('.picker-close').addEventListener('click', function() { dialog.close(); });
-            dialog.addEventListener('click', function(e) {
-                if (e.target === dialog) dialog.close();
-            });
         }
     }
 
@@ -385,66 +433,59 @@ var WeekView = (function() {
         }
     }
 
-    function renderSummary(totals) {
-        var parts = [];
-        if (typeof totals.cal === 'number') parts.push(totals.cal + ' cal');
-        if (typeof totals.protein === 'number') parts.push(totals.protein + 'g P');
-        if (typeof totals.carbs === 'number') parts.push(totals.carbs + 'g C');
-        if (typeof totals.fat === 'number') parts.push(totals.fat + 'g F');
-        return escapeHtml(parts.join(' • '));
-    }
+    /* ===== Recipe modal + delete ===== */
 
-    function renderSlotCard(slot) {
-        var mt = slot.meal_type || 'dinner';
-        var types = ['breakfast', 'lunch', 'dinner', 'snack'];
-        var typeOptions = types.map(function(t) {
-            var label = t.charAt(0).toUpperCase() + t.slice(1);
-            var sel = t === mt ? ' selected' : '';
-            return '<option value="' + t + '"' + sel + '>' + label + '</option>';
-        }).join('');
-        return '<div class="slot-card" data-id="' + escapeHtml(slot.id) + '" data-library-id="' + escapeHtml(slot.library_id || '') + '">' +
-            '<div class="slot-header">' +
-                '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
-                '<select class="slot-meal-type" title="Meal type">' + typeOptions + '</select>' +
-                '<button type="button" class="slot-toggle" title="Expand">▾</button>' +
-                '<button type="button" class="slot-fullscreen" title="Full screen">⛶</button>' +
-                '<button type="button" class="slot-delete" title="Delete">✕</button>' +
-            '</div>' +
-            '<div class="slot-body" hidden>' +
-                '<div class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(slot.macros_snapshot)) + '</div>' +
-                '<div class="slot-recipe">Loading…</div>' +
-            '</div>' +
-        '</div>';
-    }
-
-    function bindCardEvents() {
-        var cards = container.querySelectorAll('.slot-card');
-        for (var i = 0; i < cards.length; i++) {
-            var card = cards[i];
-            var toggle = card.querySelector('.slot-toggle');
-            var full = card.querySelector('.slot-fullscreen');
-            var select = card.querySelector('.slot-meal-type');
-            var del = card.querySelector('.slot-delete');
-            toggle.addEventListener('click', onToggleExpand);
-            full.addEventListener('click', onOpenModal);
-            if (select) select.addEventListener('change', onMealTypeChange);
-            if (del) del.addEventListener('click', onDeleteSlot);
-        }
+    function bindDialogEvents() {
         var dialog = document.getElementById('recipe-dialog');
         if (dialog) {
-            var closeBtn = dialog.querySelector('.dialog-close');
-            closeBtn.addEventListener('click', function() { dialog.close(); });
+            dialog.querySelector('.dialog-close').addEventListener('click', function() { dialog.close(); });
+            dialog.querySelector('.dialog-delete').addEventListener('click', onDialogDelete);
             dialog.addEventListener('click', function(e) {
                 if (e.target === dialog) dialog.close();
             });
         }
+        var picker = document.getElementById('picker-dialog');
+        if (picker) {
+            picker.querySelector('.picker-close').addEventListener('click', function() { picker.close(); });
+            picker.addEventListener('click', function(e) {
+                if (e.target === picker) picker.close();
+            });
+        }
     }
 
-    async function onDeleteSlot(e) {
-        var card = e.target.closest('.slot-card');
-        if (!card) return;
-        var id = card.dataset.id;
-        var name = card.querySelector('.slot-name').textContent;
+    async function openRecipeModal(id, libraryId, name) {
+        var dialog = document.getElementById('recipe-dialog');
+        var bodyEl = dialog.querySelector('.dialog-body');
+        dialog.dataset.slotId = id;
+        bodyEl.innerHTML =
+            '<h2>' + escapeHtml(name) + '</h2>' +
+            '<div class="dialog-macros">' + escapeHtml(currentSlotMacros(id)) + '</div>' +
+            '<div class="dialog-recipe">Loading…</div>';
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        try {
+            var meal = await getLibraryMeal(libraryId);
+            bodyEl.querySelector('.dialog-recipe').textContent = meal.recipe || '(no recipe)';
+        } catch (err) {
+            bodyEl.querySelector('.dialog-recipe').textContent = '(no recipe)';
+        }
+    }
+
+    function currentSlotMacros(id) {
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].id !== id) continue;
+            var parsed = MealsCore.parseContent(items[i].content);
+            if (parsed && parsed.macros_snapshot) {
+                return ViewUtils.formatMacros(parsed.macros_snapshot);
+            }
+        }
+        return '';
+    }
+
+    async function onDialogDelete() {
+        var dialog = document.getElementById('recipe-dialog');
+        var id = dialog.dataset.slotId;
+        if (!id) return;
+        var name = dialog.querySelector('h2').textContent;
         if (!window.confirm('Delete "' + name + '" from the week?')) return;
 
         var slotsArr = parseSlots();
@@ -466,6 +507,7 @@ var WeekView = (function() {
             nextItems.push(items[k]);
         }
         items = nextItems;
+        dialog.close();
         render();
 
         try {
@@ -478,61 +520,26 @@ var WeekView = (function() {
         }
     }
 
-    async function onMealTypeChange(e) {
-        var card = e.target.closest('.slot-card');
-        if (!card) return;
-        var id = card.dataset.id;
-        var mealType = e.target.value;
-        for (var k = 0; k < items.length; k++) {
-            if (items[k].id !== id) continue;
-            var slot = MealsCore.parseContent(items[k].content);
-            if (!slot || slot.kind !== 'slot') return;
-            slot.meal_type = mealType;
-            items[k].content = MealsCore.serialize(slot);
-            render();
-            try {
-                await api.updateItem(id, { content: items[k].content });
-            } catch (err) {
-                console.error('Meal type save failed:', err);
-            }
-            return;
-        }
+    /* ===== Summaries + card markup ===== */
+
+    function renderSummary(totals) {
+        var parts = [];
+        if (typeof totals.cal === 'number') parts.push(totals.cal + ' cal');
+        if (typeof totals.protein === 'number') parts.push(totals.protein + 'g P');
+        if (typeof totals.carbs === 'number') parts.push(totals.carbs + 'g C');
+        if (typeof totals.fat === 'number') parts.push(totals.fat + 'g F');
+        return escapeHtml(parts.join(' • '));
     }
 
-    async function onToggleExpand(e) {
-        var card = e.target.closest('.slot-card');
-        if (!card) return;
-        var body = card.querySelector('.slot-body');
-        if (body.hidden) {
-            body.hidden = false;
-            var recipeEl = body.querySelector('.slot-recipe');
-            var libraryId = card.dataset.libraryId;
-            try {
-                var meal = await getLibraryMeal(libraryId);
-                recipeEl.textContent = meal.recipe || '(no recipe)';
-            } catch (err) {
-                recipeEl.textContent = '(no recipe)';
-            }
-        } else {
-            body.hidden = true;
-        }
-    }
-
-    async function onOpenModal(e) {
-        var card = e.target.closest('.slot-card');
-        if (!card) return;
-        var dialog = document.getElementById('recipe-dialog');
-        var bodyEl = dialog.querySelector('.dialog-body');
-        var libraryId = card.dataset.libraryId;
-        var name = card.querySelector('.slot-name').textContent;
-        bodyEl.innerHTML = '<h2>' + escapeHtml(name) + '</h2><div class="dialog-recipe">Loading…</div>';
-        if (typeof dialog.showModal === 'function') dialog.showModal();
-        try {
-            var meal = await getLibraryMeal(libraryId);
-            bodyEl.querySelector('.dialog-recipe').textContent = meal.recipe || '(no recipe)';
-        } catch (err) {
-            bodyEl.querySelector('.dialog-recipe').textContent = '(no recipe)';
-        }
+    function renderSlotCard(slot) {
+        return '<div class="slot-card"' +
+            ' data-id="' + escapeHtml(slot.id) + '"' +
+            ' data-library-id="' + escapeHtml(slot.library_id || '') + '"' +
+            ' data-meal-type="' + escapeHtml(slot.meal_type || 'dinner') + '"' +
+            '>' +
+            '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
+            '<span class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(slot.macros_snapshot)) + '</span>' +
+            '</div>';
     }
 
     return {

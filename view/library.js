@@ -50,10 +50,9 @@ var LibraryView = (function() {
             for (var i = 0; i < items.length; i++) {
                 var meal = MealsCore.parseContent(items[i].content);
                 if (!meal || meal.kind !== 'meal') continue;
-                html += '<div class="library-card" data-id="' + escapeHtml(items[i].id) + '">' +
+                html += '<div class="library-card" data-id="' + escapeHtml(items[i].id) + '" role="button" tabindex="0" aria-expanded="false">' +
                     '<span class="library-name">' + escapeHtml(meal.name || '(unnamed)') + '</span>' +
                     '<span class="library-macros">' + escapeHtml(ViewUtils.formatMacros(meal.macros)) + '</span>' +
-                    '<button type="button" class="library-toggle" title="Expand">▾</button>' +
                     '<div class="library-body" hidden>' +
                         '<div class="library-recipe">' + escapeHtml(meal.recipe || '(no recipe)') + '</div>' +
                     '</div>' +
@@ -64,13 +63,28 @@ var LibraryView = (function() {
         html += '</div>';
         container.innerHTML = html;
 
-        var toggles = container.querySelectorAll('.library-toggle');
-        for (var t = 0; t < toggles.length; t++) {
-            toggles[t].addEventListener('click', function(e) {
-                var card = e.target.closest('.library-card');
-                var body = card.querySelector('.library-body');
-                body.hidden = !body.hidden;
-            });
+        var cards = container.querySelectorAll('.library-card');
+        for (var t = 0; t < cards.length; t++) {
+            cards[t].addEventListener('click', onCardClick);
+            cards[t].addEventListener('keydown', onCardKey);
+        }
+    }
+
+    function toggleCard(card) {
+        var body = card.querySelector('.library-body');
+        body.hidden = !body.hidden;
+        card.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+    }
+
+    function onCardClick(e) {
+        var card = e.currentTarget;
+        toggleCard(card);
+    }
+
+    function onCardKey(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleCard(e.currentTarget);
         }
     }
 

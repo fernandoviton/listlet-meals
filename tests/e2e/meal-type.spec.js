@@ -27,37 +27,53 @@ async function seed(page, week) {
     }, week);
 }
 
-test('each slot card shows its meal-type badge', async ({ page }) => {
+test('each day column shows meal-type sections; cards live in their section', async ({ page }) => {
     await seed(page, [
         slotItem('s1', 'mon', 0, 'Pasta', 'dinner'),
         slotItem('s2', 'tue', 0, 'Salad', 'lunch')
     ]);
     await page.goto('/?list=week');
 
-    const mon = page.locator('.day-column[data-day="mon"] .slot-card');
-    const tue = page.locator('.day-column[data-day="tue"] .slot-card');
-    await expect(mon.locator('.slot-meal-type')).toHaveValue('dinner');
-    await expect(tue.locator('.slot-meal-type')).toHaveValue('lunch');
+    // All 4 sections render per day.
+    await expect(page.locator('.day-column[data-day="mon"] .meal-section')).toHaveCount(4);
+
+    // Each slot lands in its meal-type section.
+    await expect(
+        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="dinner"] .slot-name')
+    ).toHaveText('Pasta');
+    await expect(
+        page.locator('.day-column[data-day="tue"] .meal-section[data-meal-type="lunch"] .slot-name')
+    ).toHaveText('Salad');
 });
 
-test('changing meal type persists across reload and re-filters', async ({ page }) => {
+test('dragging a slot to a different meal-type section updates meal_type and persists', async ({ page }) => {
     await seed(page, [slotItem('s1', 'mon', 0, 'Pasta', 'dinner')]);
     await page.goto('/?list=week');
 
     const card = page.locator('.day-column[data-day="mon"] .slot-card');
-    await card.locator('.slot-meal-type').selectOption('lunch');
+    const lunchSection = page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"]');
+    await card.dragTo(lunchSection);
 
-    // Filter to "Dinner" — card should disappear.
+    // Card now lives in the lunch section.
+    await expect(
+        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"] .slot-name')
+    ).toHaveText('Pasta');
+    await expect(
+        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="dinner"] .slot-card')
+    ).toHaveCount(0);
+
+    // Filter to "Dinner" — card hidden.
     await page.locator('.filter-pill[data-filter="dinner"]').click();
     await expect(page.locator('.day-column[data-day="mon"] .slot-card')).toHaveCount(0);
 
-    // Filter to "Lunch" — card should appear.
+    // Filter to "Lunch" — card visible.
     await page.locator('.filter-pill[data-filter="lunch"]').click();
     await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText('Pasta');
 
     // Reload — change persists.
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
     await page.goto('/?list=week');
-    await expect(page.locator('.day-column[data-day="mon"] .slot-card .slot-meal-type'))
-        .toHaveValue('lunch');
+    await expect(
+        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"] .slot-name')
+    ).toHaveText('Pasta');
 });

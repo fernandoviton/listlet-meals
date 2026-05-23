@@ -69,7 +69,7 @@ Notes:
 - `day` is one of `["sat","sun","mon","tue","wed","thu","fri"]`.
 - `meal_type` is one of `["breakfast","lunch","dinner","snack"]`.
 - Any macro field may be missing or `null`. `summarizeMacros` only emits keys that appeared at least once.
-- `order` is per-day, 0-indexed, and recompacted on move / delete.
+- `order` is per-(day, meal_type), 0-indexed, and recompacted on move / delete.
 
 ## `MealsCore` surface
 
@@ -77,10 +77,10 @@ Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test
 
 - `parseContent(jsonString)` → object | `null`
 - `serialize(obj)` → string
-- `nextOrder(slots, day)` → number
-- `addSlot(weekItems, libraryMeal, day)` → `{ newSlotContent }`
-- `moveSlot(slots, id, toDay, toIndex)` → new slot array with recompacted `order`
-- `removeSlot(slots, id)` → new slot array with recompacted `order`
+- `nextOrder(slots, day, mealType)` → number
+- `addSlot(weekItems, libraryMeal, day)` → `{ newSlotContent }` — meal_type comes from the library meal's `default_meal_type`
+- `moveSlot(slots, id, toDay, toMealType, toIndex)` → new slot array with recompacted `order` within source and target (day, meal_type) sections
+- `removeSlot(slots, id)` → new slot array with recompacted `order` within the source (day, meal_type)
 - `setMealType(slots, id, mealType)` → new slot array
 - `summarizeMacros(slots)` → totals object (only keys that appeared)
 - `summarizeLibrary(items)` → `[{ id, name, default_meal_type }]` sorted by name
@@ -112,9 +112,21 @@ Each `*View.init(container, api)` module:
 
 `WeekView` additionally maintains a `libraryApi` + `libraryCache` for slot recipe lookups (`getLibraryMeal`) and picker population — only the week view needs to read individual library rows.
 
+### Day column layout
+
+Each day column renders four meal-type sections (`breakfast`, `lunch`, `dinner`, `snack`) as `.meal-section[data-day][data-meal-type]`. Slots live in their meal-type section, sorted by `order` within that section. The active filter (`all` / a specific meal type) controls which sections render. Empty sections still render so they remain valid drop targets.
+
+### Slot card interactions
+
+The slot card is a single tap target with no buttons. Tapping (pointerdown → pointerup with movement under the threshold) opens the recipe modal, which contains the meal name, macros, recipe, and a destructive **Delete** action. Drag changes both day and meal_type by dropping into a target `.meal-section`.
+
 ### Drag-and-drop
 
-Pointer-based, works on mouse and touch. Mouse starts drag immediately; touch / pen requires a 300 ms long-press and aborts if the pointer moves >10 px before the timer fires. Pointer capture is taken on `pointerdown` so the gesture survives the finger drifting off the handle. A floating ghost element follows the pointer; `elementFromPoint` (with the ghost briefly hidden) resolves the drop target. Commit goes through `MealsCore.moveSlot` and a debounced batch of `api.updateItem` calls.
+Pointer-based, works on mouse and touch. Touch / pen requires a 300 ms long-press and cancels if the pointer moves >10 px before the timer fires (treated as a scroll). Mouse drag begins once the pointer crosses the same 10 px threshold — a mousedown/up under that threshold is treated as a tap and opens the modal. Pointer capture is taken on `pointerdown` so the gesture survives the finger drifting off the card. A floating ghost element follows the pointer; `elementFromPoint` (with the ghost briefly hidden) resolves the nearest `.meal-section` (falling back to the column + the slot's current meal_type if dropped outside any section). Commit goes through `MealsCore.moveSlot(id, day, mealType, index)` and a debounced batch of `api.updateItem` calls.
+
+### Library card interactions
+
+The whole library card is the toggle: click (or Enter/Space when focused) flips `library-body[hidden]` and `aria-expanded`. No separate toggle button.
 
 ## Persistence
 

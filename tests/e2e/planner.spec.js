@@ -80,7 +80,7 @@ test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page
     await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Pasta');
 });
 
-test('card expands inline and opens full-screen modal', async ({ page }) => {
+test('clicking a slot card opens the recipe modal', async ({ page }) => {
     await seed(page,
         [slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta' })],
         [libraryItem('lib-pasta', 'Pasta', 'Boil water. Add pasta. Drain.')]
@@ -88,16 +88,12 @@ test('card expands inline and opens full-screen modal', async ({ page }) => {
     await page.goto('/?list=week');
 
     const card = page.locator('.day-column[data-day="mon"] .slot-card');
-    const body = card.locator('.slot-body');
-    await expect(body).toBeHidden();
-
-    await card.locator('.slot-toggle').click();
-    await expect(body).toBeVisible();
-    await expect(body.locator('.slot-recipe')).toHaveText('Boil water. Add pasta. Drain.');
-
-    await card.locator('.slot-fullscreen').click();
     const dialog = page.locator('#recipe-dialog');
+    await expect(dialog).not.toHaveAttribute('open', '');
+
+    await card.click();
     await expect(dialog).toHaveAttribute('open', '');
+    await expect(dialog.locator('h2')).toHaveText('Pasta');
     await expect(dialog.locator('.dialog-recipe')).toHaveText('Boil water. Add pasta. Drain.');
 
     await page.keyboard.press('Escape');

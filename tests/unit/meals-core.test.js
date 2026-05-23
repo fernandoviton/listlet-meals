@@ -3,26 +3,27 @@ const MealsCore = require('../../meals-core');
 describe('meals-core', () => {
     describe('nextOrder', () => {
         test('returns 0 for empty slot list', () => {
-            expect(MealsCore.nextOrder([], 'sat')).toBe(0);
+            expect(MealsCore.nextOrder([], 'sat', 'breakfast')).toBe(0);
         });
 
-        test('returns max order + 1 for the given day', () => {
+        test('returns max order + 1 for the given (day, meal_type)', () => {
             const slots = [
-                { day: 'mon', order: 0 },
-                { day: 'mon', order: 1 },
-                { day: 'mon', order: 2 }
+                { day: 'mon', meal_type: 'lunch', order: 0 },
+                { day: 'mon', meal_type: 'lunch', order: 1 },
+                { day: 'mon', meal_type: 'lunch', order: 2 }
             ];
-            expect(MealsCore.nextOrder(slots, 'mon')).toBe(3);
+            expect(MealsCore.nextOrder(slots, 'mon', 'lunch')).toBe(3);
         });
 
-        test('ignores slots from other days', () => {
+        test('ignores slots from other days or other meal types', () => {
             const slots = [
-                { day: 'sat', order: 5 },
-                { day: 'sun', order: 7 },
-                { day: 'mon', order: 0 }
+                { day: 'sat', meal_type: 'lunch', order: 5 },
+                { day: 'mon', meal_type: 'breakfast', order: 7 },
+                { day: 'mon', meal_type: 'lunch', order: 0 }
             ];
-            expect(MealsCore.nextOrder(slots, 'mon')).toBe(1);
-            expect(MealsCore.nextOrder(slots, 'tue')).toBe(0);
+            expect(MealsCore.nextOrder(slots, 'mon', 'lunch')).toBe(1);
+            expect(MealsCore.nextOrder(slots, 'mon', 'dinner')).toBe(0);
+            expect(MealsCore.nextOrder(slots, 'tue', 'lunch')).toBe(0);
         });
     });
 
@@ -79,42 +80,65 @@ describe('meals-core', () => {
     });
 
     describe('moveSlot', () => {
-        function s(id, day, order, extra) {
-            return Object.assign({ id: id, day: day, order: order }, extra || {});
+        function s(id, day, mealType, order) {
+            return { id: id, day: day, meal_type: mealType, order: order };
         }
 
-        function bySorted(slots, day) {
-            return slots.filter(x => x.day === day).sort((a, b) => a.order - b.order).map(x => x.id);
+        function bySorted(slots, day, mealType) {
+            return slots
+                .filter(x => x.day === day && x.meal_type === mealType)
+                .sort((a, b) => a.order - b.order)
+                .map(x => x.id);
         }
 
-        test('moving within a day reorders and leaves other days alone', () => {
+        test('moving within the same (day, meal_type) reorders only that section', () => {
             const slots = [
-                s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2),
-                s('x', 'tue', 0), s('y', 'tue', 1)
+                s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1), s('c', 'mon', 'lunch', 2),
+                s('x', 'tue', 'lunch', 0), s('y', 'tue', 'lunch', 1)
             ];
-            const moved = MealsCore.moveSlot(slots, 'c', 'mon', 0);
-            expect(bySorted(moved, 'mon')).toEqual(['c', 'a', 'b']);
-            expect(bySorted(moved, 'tue')).toEqual(['x', 'y']);
+            const moved = MealsCore.moveSlot(slots, 'c', 'mon', 'lunch', 0);
+            expect(bySorted(moved, 'mon', 'lunch')).toEqual(['c', 'a', 'b']);
+            expect(bySorted(moved, 'tue', 'lunch')).toEqual(['x', 'y']);
         });
 
         test('moving across days renumbers source and inserts at target index', () => {
             const slots = [
-                s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2),
-                s('x', 'tue', 0), s('y', 'tue', 1)
+                s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1), s('c', 'mon', 'lunch', 2),
+                s('x', 'tue', 'lunch', 0), s('y', 'tue', 'lunch', 1)
             ];
-            const moved = MealsCore.moveSlot(slots, 'b', 'tue', 1);
-            expect(bySorted(moved, 'mon')).toEqual(['a', 'c']);
-            expect(bySorted(moved, 'tue')).toEqual(['x', 'b', 'y']);
-            for (const day of ['mon', 'tue']) {
-                const orders = moved.filter(x => x.day === day).map(x => x.order).sort();
-                expect(orders).toEqual(orders.map((_, i) => i));
-            }
+            const moved = MealsCore.moveSlot(slots, 'b', 'tue', 'lunch', 1);
+            expect(bySorted(moved, 'mon', 'lunch')).toEqual(['a', 'c']);
+            expect(bySorted(moved, 'tue', 'lunch')).toEqual(['x', 'b', 'y']);
+        });
+
+        test('moving to a different meal_type within the same day updates meal_type and reorders both sections', () => {
+            const slots = [
+                s('a', 'mon', 'breakfast', 0), s('b', 'mon', 'breakfast', 1),
+                s('c', 'mon', 'lunch', 0), s('d', 'mon', 'lunch', 1)
+            ];
+            const moved = MealsCore.moveSlot(slots, 'a', 'mon', 'lunch', 1);
+            expect(bySorted(moved, 'mon', 'breakfast')).toEqual(['b']);
+            expect(bySorted(moved, 'mon', 'lunch')).toEqual(['c', 'a', 'd']);
+            expect(moved.find(x => x.id === 'a').meal_type).toBe('lunch');
+        });
+
+        test('moving across both day and meal_type updates both fields and reorders sections', () => {
+            const slots = [
+                s('a', 'mon', 'breakfast', 0),
+                s('x', 'tue', 'dinner', 0), s('y', 'tue', 'dinner', 1)
+            ];
+            const moved = MealsCore.moveSlot(slots, 'a', 'tue', 'dinner', 1);
+            expect(bySorted(moved, 'mon', 'breakfast')).toEqual([]);
+            expect(bySorted(moved, 'tue', 'dinner')).toEqual(['x', 'a', 'y']);
+            const a = moved.find(x => x.id === 'a');
+            expect(a.day).toBe('tue');
+            expect(a.meal_type).toBe('dinner');
         });
 
         test('is pure (does not mutate input)', () => {
-            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const slots = [s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1)];
             const copy = JSON.parse(JSON.stringify(slots));
-            MealsCore.moveSlot(slots, 'b', 'mon', 0);
+            MealsCore.moveSlot(slots, 'b', 'mon', 'lunch', 0);
             expect(slots).toEqual(copy);
         });
     });
@@ -142,11 +166,12 @@ describe('meals-core', () => {
             expect(parsed.macros_snapshot).toEqual({ cal: 300, protein: 10, carbs: 50, fat: 5 });
         });
 
-        test('order continues from existing same-day slots', () => {
+        test('order continues from existing same-(day, meal_type) slots only', () => {
             const weekItems = [
-                { id: 'a', content: JSON.stringify({ kind: 'slot', day: 'wed', order: 0 }) },
-                { id: 'b', content: JSON.stringify({ kind: 'slot', day: 'wed', order: 1 }) },
-                { id: 'c', content: JSON.stringify({ kind: 'slot', day: 'thu', order: 0 }) }
+                { id: 'a', content: JSON.stringify({ kind: 'slot', day: 'wed', meal_type: 'lunch', order: 0 }) },
+                { id: 'b', content: JSON.stringify({ kind: 'slot', day: 'wed', meal_type: 'lunch', order: 1 }) },
+                { id: 'c', content: JSON.stringify({ kind: 'slot', day: 'wed', meal_type: 'dinner', order: 0 }) },
+                { id: 'd', content: JSON.stringify({ kind: 'slot', day: 'thu', meal_type: 'lunch', order: 0 }) }
             ];
             const libraryMeal = {
                 id: 'lib-1',
@@ -154,44 +179,58 @@ describe('meals-core', () => {
             };
             const result = MealsCore.addSlot(weekItems, libraryMeal, 'wed');
             const parsed = JSON.parse(result.newSlotContent);
+            expect(parsed.meal_type).toBe('lunch');
             expect(parsed.order).toBe(2);
         });
     });
 
     describe('removeSlot', () => {
-        function s(id, day, order) { return { id: id, day: day, order: order }; }
+        function s(id, day, mealType, order) {
+            return { id: id, day: day, meal_type: mealType, order: order };
+        }
 
         test('removes the slot from the list', () => {
-            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const slots = [s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1)];
             const out = MealsCore.removeSlot(slots, 'a');
             expect(out.map(x => x.id)).toEqual(['b']);
         });
 
-        test('compacts order within the source day', () => {
-            const slots = [s('a', 'mon', 0), s('b', 'mon', 1), s('c', 'mon', 2)];
+        test('compacts order within the source (day, meal_type)', () => {
+            const slots = [
+                s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1), s('c', 'mon', 'lunch', 2)
+            ];
             const out = MealsCore.removeSlot(slots, 'b');
-            const mon = out.filter(x => x.day === 'mon').sort((a, b) => a.order - b.order);
-            expect(mon.map(x => x.id)).toEqual(['a', 'c']);
-            expect(mon.map(x => x.order)).toEqual([0, 1]);
+            const remaining = out.filter(x => x.day === 'mon' && x.meal_type === 'lunch')
+                .sort((a, b) => a.order - b.order);
+            expect(remaining.map(x => x.id)).toEqual(['a', 'c']);
+            expect(remaining.map(x => x.order)).toEqual([0, 1]);
         });
 
-        test('leaves other days alone', () => {
-            const slots = [s('a', 'mon', 0), s('b', 'mon', 1), s('x', 'tue', 0), s('y', 'tue', 1)];
+        test('leaves other sections alone', () => {
+            const slots = [
+                s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1),
+                s('p', 'mon', 'dinner', 0), s('q', 'mon', 'dinner', 1),
+                s('x', 'tue', 'lunch', 0), s('y', 'tue', 'lunch', 1)
+            ];
             const out = MealsCore.removeSlot(slots, 'a');
-            const tue = out.filter(x => x.day === 'tue').sort((a, b) => a.order - b.order);
+            const dinner = out.filter(x => x.day === 'mon' && x.meal_type === 'dinner')
+                .sort((a, b) => a.order - b.order);
+            expect(dinner.map(x => x.order)).toEqual([0, 1]);
+            const tue = out.filter(x => x.day === 'tue' && x.meal_type === 'lunch')
+                .sort((a, b) => a.order - b.order);
             expect(tue.map(x => x.id)).toEqual(['x', 'y']);
             expect(tue.map(x => x.order)).toEqual([0, 1]);
         });
 
         test('unknown id returns an equivalent copy', () => {
-            const slots = [s('a', 'mon', 0)];
+            const slots = [s('a', 'mon', 'lunch', 0)];
             const out = MealsCore.removeSlot(slots, 'missing');
             expect(out).toEqual(slots);
             expect(out).not.toBe(slots);
         });
 
         test('is pure (does not mutate input)', () => {
-            const slots = [s('a', 'mon', 0), s('b', 'mon', 1)];
+            const slots = [s('a', 'mon', 'lunch', 0), s('b', 'mon', 'lunch', 1)];
             const copy = JSON.parse(JSON.stringify(slots));
             MealsCore.removeSlot(slots, 'a');
             expect(slots).toEqual(copy);

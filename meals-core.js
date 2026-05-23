@@ -15,10 +15,11 @@ var MealsCore = (function() {
         return JSON.stringify(obj);
     }
 
-    function nextOrder(slots, day) {
+    function nextOrder(slots, day, mealType) {
         var max = -1;
         for (var i = 0; i < slots.length; i++) {
-            if (slots[i].day === day && typeof slots[i].order === 'number' && slots[i].order > max) {
+            if (slots[i].day === day && slots[i].meal_type === mealType
+                && typeof slots[i].order === 'number' && slots[i].order > max) {
                 max = slots[i].order;
             }
         }
@@ -32,19 +33,20 @@ var MealsCore = (function() {
             var parsed = parseContent(weekItems[i].content);
             if (parsed && parsed.kind === 'slot') existingSlots.push(parsed);
         }
+        var mealType = meal.default_meal_type || 'dinner';
         var slot = {
             kind: 'slot',
             library_id: libraryMeal.id,
             day: day,
-            meal_type: meal.default_meal_type || 'dinner',
-            order: nextOrder(existingSlots, day),
+            meal_type: mealType,
+            order: nextOrder(existingSlots, day, mealType),
             name_snapshot: meal.name || '',
             macros_snapshot: meal.macros || {}
         };
         return { newSlotContent: serialize(slot) };
     }
 
-    function moveSlot(slots, id, toDay, toIndex) {
+    function moveSlot(slots, id, toDay, toMealType, toIndex) {
         var copy = slots.map(function(s) {
             return Object.assign({}, s);
         });
@@ -55,20 +57,23 @@ var MealsCore = (function() {
         if (!moving) return copy;
 
         var fromDay = moving.day;
-        var targetDay = copy
-            .filter(function(s) { return s.day === toDay && s.id !== id; })
+        var fromMealType = moving.meal_type;
+
+        var targetSection = copy
+            .filter(function(s) { return s.day === toDay && s.meal_type === toMealType && s.id !== id; })
             .sort(function(a, b) { return a.order - b.order; });
 
         moving.day = toDay;
-        var clampedIndex = Math.max(0, Math.min(toIndex, targetDay.length));
-        targetDay.splice(clampedIndex, 0, moving);
-        targetDay.forEach(function(s, idx) { s.order = idx; });
+        moving.meal_type = toMealType;
+        var clampedIndex = Math.max(0, Math.min(toIndex, targetSection.length));
+        targetSection.splice(clampedIndex, 0, moving);
+        targetSection.forEach(function(s, idx) { s.order = idx; });
 
-        if (fromDay !== toDay) {
-            var sourceDay = copy
-                .filter(function(s) { return s.day === fromDay && s.id !== id; })
+        if (fromDay !== toDay || fromMealType !== toMealType) {
+            var sourceSection = copy
+                .filter(function(s) { return s.day === fromDay && s.meal_type === fromMealType && s.id !== id; })
                 .sort(function(a, b) { return a.order - b.order; });
-            sourceDay.forEach(function(s, idx) { s.order = idx; });
+            sourceSection.forEach(function(s, idx) { s.order = idx; });
         }
 
         return copy;
@@ -85,10 +90,10 @@ var MealsCore = (function() {
             }
         }
         if (!removed) return kept;
-        var sameDay = kept
-            .filter(function(s) { return s.day === removed.day; })
+        var sameSection = kept
+            .filter(function(s) { return s.day === removed.day && s.meal_type === removed.meal_type; })
             .sort(function(a, b) { return a.order - b.order; });
-        sameDay.forEach(function(s, idx) { s.order = idx; });
+        sameSection.forEach(function(s, idx) { s.order = idx; });
         return kept;
     }
 
