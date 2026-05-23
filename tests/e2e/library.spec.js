@@ -1,6 +1,6 @@
 const { test, expect } = require('./fixtures');
 
-function libraryItem(id, name, recipe) {
+function libraryItem(id, name, recipe, macros) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -10,26 +10,39 @@ function libraryItem(id, name, recipe) {
             name: name,
             recipe: recipe,
             default_meal_type: 'lunch',
-            macros: {}
+            macros: macros || {}
         }),
         created_at: now,
         updated_at: now
     };
 }
 
-test('library "+" popover adds a slot to the week', async ({ page }) => {
+test('library shows name, macros, and expandable recipe (no add-to-week UI)', async ({ page }) => {
     await page.goto('/');
     await page.evaluate((items) => {
         localStorage.clear();
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(items));
-    }, [libraryItem('lib-pasta', 'Pasta', 'Boil water.')]);
+    }, [libraryItem('lib-pasta', 'Pasta', 'Boil water.\nAdd pasta.', { cal: 500, protein: 20 })]);
 
     await page.goto('/?list=library');
+
     await expect(page.locator('.library-card .library-name')).toHaveText('Pasta');
 
-    await page.locator('.library-add').click();
-    await page.locator('.day-pick[data-day="wed"]').click();
+    await expect(page.locator('.library-add')).toHaveCount(0);
+    await expect(page.locator('.day-pick')).toHaveCount(0);
 
-    await page.goto('/?list=week');
-    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Pasta');
+    var macros = page.locator('.library-card .library-macros');
+    await expect(macros).toBeVisible();
+    await expect(macros).toContainText('500 cal');
+    await expect(macros).toContainText('20g P');
+
+    var recipe = page.locator('.library-card .library-recipe');
+    await expect(recipe).toBeHidden();
+
+    await page.locator('.library-card .library-toggle').click();
+    await expect(recipe).toBeVisible();
+    await expect(recipe).toContainText('Boil water.');
+
+    await page.locator('.library-card .library-toggle').click();
+    await expect(recipe).toBeHidden();
 });

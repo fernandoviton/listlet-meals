@@ -272,31 +272,29 @@ body {
     flex: 1;
 }
 
-.library-add {
-    background: #4a6fa5;
-    color: #fff;
+.library-macros {
+    color: #555;
+    font-size: 0.85rem;
+}
+
+.library-toggle {
+    background: transparent;
     border: none;
-    border-radius: 4px;
-    width: 1.75rem;
-    height: 1.75rem;
     cursor: pointer;
+    color: #555;
+    padding: 0 0.25rem;
     font-size: 1rem;
 }
 
-.day-picker {
+.library-body {
     flex-basis: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+    border-top: 1px solid #e2e4e8;
+    padding-top: 0.4rem;
+    font-size: 0.85rem;
 }
 
-.day-pick {
-    background: #f1f5fb;
-    border: 1px solid #cfd8e3;
-    border-radius: 4px;
-    padding: 0.25rem 0.6rem;
-    cursor: pointer;
-    font-size: 0.85rem;
+.library-recipe {
+    white-space: pre-wrap;
 }
 
 @media (max-width: 800px) {
