@@ -63,8 +63,16 @@
 
     <!-- Init -->
     <script>
+        // Auth.init fires this callback on the restored session AND again on the
+        // SIGNED_IN event, so guard the one-time app boot. Re-running it calls
+        // Sync.init twice, and Supabase rejects a second subscribe on the same
+        // channel ("cannot add postgres_changes callbacks ... after subscribe()").
+        // Header.render stays outside the guard so a later sign-in still updates it.
+        var appBooted = false;
         Auth.init(async function(user) {
             Header.render(document.getElementById('header'), user);
+            if (appBooted) return;
+            appBooted = true;
             await App.ensureMockSeed();
             if (hasExplicitListName()) {
                 App.init(document.getElementById('app'), getListName());
