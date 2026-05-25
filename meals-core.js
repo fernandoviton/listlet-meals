@@ -154,6 +154,38 @@ var MealsCore = (function() {
         return slots.filter(function(s) { return s.meal_type === type; });
     }
 
+    var MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
+    var MACRO_KEYS = ['cal', 'protein', 'carbs', 'fat'];
+
+    function makeLibraryMeal(input) {
+        input = input || {};
+        var name = typeof input.name === 'string' ? input.name.trim() : '';
+        if (!name) throw new Error('name is required');
+
+        var mealType = input.default_meal_type || 'dinner';
+        if (MEAL_TYPES.indexOf(mealType) === -1) {
+            throw new Error('invalid meal type "' + mealType + '" (expected one of ' + MEAL_TYPES.join(', ') + ')');
+        }
+
+        var rawMacros = input.macros || {};
+        var macros = {};
+        for (var i = 0; i < MACRO_KEYS.length; i++) {
+            var key = MACRO_KEYS[i];
+            var num = Number(rawMacros[key]);
+            if (rawMacros[key] !== null && rawMacros[key] !== undefined && rawMacros[key] !== '' && !isNaN(num)) {
+                macros[key] = num;
+            }
+        }
+
+        return {
+            kind: 'meal',
+            name: name,
+            recipe: typeof input.recipe === 'string' ? input.recipe : '',
+            default_meal_type: mealType,
+            macros: macros
+        };
+    }
+
     return {
         parseContent: parseContent,
         serialize: serialize,
@@ -164,7 +196,8 @@ var MealsCore = (function() {
         setMealType: setMealType,
         summarizeMacros: summarizeMacros,
         summarizeLibrary: summarizeLibrary,
-        filterSlotsByType: filterSlotsByType
+        filterSlotsByType: filterSlotsByType,
+        makeLibraryMeal: makeLibraryMeal
     };
 })();
 

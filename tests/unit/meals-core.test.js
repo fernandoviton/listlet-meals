@@ -336,4 +336,66 @@ describe('meals-core', () => {
             expect(MealsCore.parseContent(undefined)).toBeNull();
         });
     });
+
+    describe('makeLibraryMeal', () => {
+        test('builds a full meal object', () => {
+            expect(MealsCore.makeLibraryMeal({
+                name: 'Oatmeal',
+                recipe: 'Cook oats.',
+                default_meal_type: 'breakfast',
+                macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
+            })).toEqual({
+                kind: 'meal',
+                name: 'Oatmeal',
+                recipe: 'Cook oats.',
+                default_meal_type: 'breakfast',
+                macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
+            });
+        });
+
+        test('defaults recipe to empty string and meal_type to dinner', () => {
+            expect(MealsCore.makeLibraryMeal({ name: 'Mystery Plate' })).toEqual({
+                kind: 'meal',
+                name: 'Mystery Plate',
+                recipe: '',
+                default_meal_type: 'dinner',
+                macros: {}
+            });
+        });
+
+        test('trims the name', () => {
+            expect(MealsCore.makeLibraryMeal({ name: '  Tacos  ' }).name).toBe('Tacos');
+        });
+
+        test('throws when name is missing or blank', () => {
+            expect(() => MealsCore.makeLibraryMeal({})).toThrow(/name/i);
+            expect(() => MealsCore.makeLibraryMeal({ name: '   ' })).toThrow(/name/i);
+        });
+
+        test('throws on an invalid meal_type', () => {
+            expect(() => MealsCore.makeLibraryMeal({ name: 'X', default_meal_type: 'brunch' }))
+                .toThrow(/meal type/i);
+        });
+
+        test('coerces numeric-string macros to numbers', () => {
+            expect(MealsCore.makeLibraryMeal({
+                name: 'X',
+                macros: { cal: '320', protein: '12' }
+            }).macros).toEqual({ cal: 320, protein: 12 });
+        });
+
+        test('drops missing, null, and non-numeric macro keys', () => {
+            expect(MealsCore.makeLibraryMeal({
+                name: 'X',
+                macros: { cal: 320, protein: null, carbs: 'lots', fat: undefined }
+            }).macros).toEqual({ cal: 320 });
+        });
+
+        test('ignores unknown macro keys', () => {
+            expect(MealsCore.makeLibraryMeal({
+                name: 'X',
+                macros: { cal: 100, fiber: 9 }
+            }).macros).toEqual({ cal: 100 });
+        });
+    });
 });

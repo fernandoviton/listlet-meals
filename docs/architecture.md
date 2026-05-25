@@ -85,6 +85,7 @@ Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test
 - `summarizeMacros(slots)` → totals object (only keys that appeared)
 - `summarizeLibrary(items)` → `[{ id, name, default_meal_type }]` sorted by name
 - `filterSlotsByType(slots, type)` — `'all'` passes through
+- `makeLibraryMeal(input)` → library `content` object `{ kind:'meal', name, recipe, default_meal_type, macros }`. Requires a non-blank `name`, defaults `default_meal_type` to `dinner` (throws on an unknown type), defaults `recipe` to `''`, and keeps only macro keys whose value coerces to a finite number. Used by the `scripts/library.js` CLI.
 
 ## `ViewUtils` surface
 
@@ -138,9 +139,19 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 
 ## Config
 
-- `config.js` — checked in, default values.
-- `config.local.js` — gitignored, overrides for local dev / production Supabase keys.
-- Keys: `APP_TITLE: 'Listlet Meals'`, `DB_TABLE: 'listlet_meals'`, `DEFAULT_LIST_NAME: 'week'`, optional `SUPABASE_URL` / `SUPABASE_ANON_KEY`.
+- `config.js` — checked in, default values. CI injects the production Supabase secrets into it at deploy time (`.github/workflows/deploy.yml`); the checked-in copy stays blank.
+- `config.local.js` — gitignored, overrides for local dev. Loaded only on localhost by `shared/config-loader.js`, in preference to `config.js`.
+- Keys: `APP_TITLE: 'Listlet Meals'`, `DB_TABLE: 'listlet_meals'`, `DEFAULT_LIST_NAME: 'week'`, optional `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`.
+
+## CLI tooling (`scripts/`)
+
+Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
+
+- `scripts/library.js` — `list` / `add` / `delete` library meals. `add` builds `content` via `MealsCore.makeLibraryMeal`; `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
+- `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
+- `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
+
+`.env` keys: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (same values as `config.local.js`), `SUPABASE_REFRESH_TOKEN` (bootstrapped), optional `DB_TABLE` (defaults to `listlet_meals`).
 
 ## Tests
 
@@ -164,6 +175,10 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `app.css` | App-specific styles |
 | `config.js` / `config.local.js` | Runtime config |
 | `shared/` | Upstream starter kit — do not edit |
+| `scripts/library.js` | CLI to list/add/delete library meals (no UI yet) |
+| `scripts/supabase-cli.js` | Shared CLI Supabase client + refresh-token login |
+| `scripts/google-login.js` | One-time OAuth bootstrap for the CLI refresh token |
+| `.env` / `.env.example` | CLI credentials (gitignored / template) |
 | `sql/setup.sql` | Supabase table setup |
 | `tests/unit/` | Jest |
 | `tests/e2e/` | Playwright |

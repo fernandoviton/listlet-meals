@@ -35,17 +35,33 @@ Days: `["sat","sun","mon","tue","wed","thu","fri"]`. Any macro field may be `nul
 
 ## File Structure
 
-- `meals-core.js` — pure logic (parseContent, serialize, nextOrder, addSlot, moveSlot, summarizeMacros, filterSlotsByType). Loaded in browser and required by Jest. Covered by `tests/unit/meals-core.test.js`.
+- `meals-core.js` — pure logic (parseContent, serialize, nextOrder, addSlot, moveSlot, summarizeMacros, filterSlotsByType, makeLibraryMeal). Loaded in browser and required by Jest. Covered by `tests/unit/meals-core.test.js`.
 - `app.js` — DOM/render/event-wiring. Calls into `MealsCore` for every state transformation.
 - `app.css` — styles.
 - `shared/` — Shared infrastructure. **Do not edit.**
 - `config.js` / `config.local.js` — `config.local.js` is gitignored and loaded at runtime.
+- `scripts/` — Node CLI tooling (not served to the browser). See "Library CLI" below.
 
 ## Config Keys
 
 - `APP_TITLE: 'Listlet Meals'`
 - `DB_TABLE: 'listlet_meals'`
 - `DEFAULT_LIST_NAME: 'week'`
+
+## Library CLI
+
+There is **no browser UI for adding/editing/deleting library meals yet** — use the CLI at `scripts/library.js`:
+
+```
+node scripts/library.js list
+node scripts/library.js add --name "Oatmeal" --type breakfast \
+     --recipe "Cook oats with milk." --cal 320 --protein 12 --carbs 55 --fat 6
+node scripts/library.js delete --name "Oatmeal"     # or --id <uuid>
+```
+
+- `--type` is one of `breakfast|lunch|dinner|snack` (default `dinner`); all macros are optional. `add` builds `content` via `MealsCore.makeLibraryMeal`.
+- Writes to the real Supabase `listlet_meals` table (`list_name='library'`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.
+- Requires `.env` (see `.env.example`) with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_REFRESH_TOKEN`. **If you (Claude) hit an auth error**, the token is missing/expired — ask the user to run `node scripts/google-login.js` once (it needs a browser OAuth round-trip you can't perform).
 
 ## Testing
 

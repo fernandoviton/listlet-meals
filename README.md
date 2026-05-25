@@ -20,6 +20,43 @@ To run against a real backend instead of mock mode:
 3. Copy `config.js` to `config.local.js` and fill in `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`
 
 For deployment and OAuth setup, see the [listlet-shared README](../listlet-shared/README.md).
+If you also want to use the library CLI below, add `http://localhost:3000/auth/callback` to
+the allowed redirect URLs in Supabase → Authentication → URL Configuration.
+
+## Managing the meal library (CLI)
+
+There is **no in-app UI for adding/editing/deleting library meals yet** — use the CLI.
+It writes to the real Supabase backend (not mock mode) and signs in as you via a stored
+Google refresh token (not a `service_role` key).
+
+### One-time setup
+
+```bash
+cp .env.example .env
+# Fill in SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY (same values as config.local.js)
+node scripts/google-login.js   # open http://localhost:3000, sign in — writes the token to .env
+```
+
+`.env` is gitignored. The CLI rewrites the (rotating) refresh token on each run, so it
+keeps working without re-bootstrapping.
+
+### Usage
+
+```bash
+# List every meal
+node scripts/library.js list
+
+# Add a meal (--type defaults to dinner; all macros optional)
+node scripts/library.js add --name "Oatmeal" --type breakfast \
+     --recipe "Cook oats with milk. Top with berries." \
+     --cal 320 --protein 12 --carbs 55 --fat 6
+
+# Delete by name (errors if ambiguous) or by row id
+node scripts/library.js delete --name "Oatmeal"
+node scripts/library.js delete --id <uuid>
+```
+
+Meal types: `breakfast`, `lunch`, `dinner`, `snack`.
 
 ## Architecture
 
