@@ -86,6 +86,7 @@ Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test
 - `summarizeLibrary(items)` → `[{ id, name, default_meal_type }]` sorted by name
 - `filterSlotsByType(slots, type)` — `'all'` passes through
 - `makeLibraryMeal(input)` → library `content` object `{ kind:'meal', name, recipe, default_meal_type, macros }`. Requires a non-blank `name`, defaults `default_meal_type` to `dinner` (throws on an unknown type), defaults `recipe` to `''`, and keeps only macro keys whose value coerces to a finite number. Used by the `scripts/library.js` CLI.
+- `updateLibraryMeal(existing, changes)` → merges `changes` onto an existing parsed meal and returns a fresh `content` object. Only fields present in `changes` override; macros merge per-key (pass `''`/`null` to clear one). Validation is delegated to `makeLibraryMeal`. Lets the CLI edit a row **in place** (stable `id`) so placed week slots keep their recipe link.
 
 ## `ViewUtils` surface
 
@@ -147,7 +148,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 
 Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
 
-- `scripts/library.js` — `list` / `add` / `delete` library meals. `add` builds `content` via `MealsCore.makeLibraryMeal`; `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
+- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
 - `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
 - `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
 
@@ -175,7 +176,7 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `app.css` | App-specific styles |
 | `config.js` / `config.local.js` | Runtime config |
 | `shared/` | Upstream starter kit — do not edit |
-| `scripts/library.js` | CLI to list/add/delete library meals (no UI yet) |
+| `scripts/library.js` | CLI to list/add/update/delete library meals (no UI yet) |
 | `scripts/supabase-cli.js` | Shared CLI Supabase client + refresh-token login |
 | `scripts/google-login.js` | One-time OAuth bootstrap for the CLI refresh token |
 | `.env` / `.env.example` | CLI credentials (gitignored / template) |

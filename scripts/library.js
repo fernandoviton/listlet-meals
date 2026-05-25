@@ -24,6 +24,9 @@ const USAGE = `Usage: node scripts/library.js <command> [options]
 Commands:
   list                      List every meal in the library
   add  --name <n> [opts]    Add a meal
+  update --id <uuid> [opts] Edit a meal in place (keeps the id, so placed week
+  update --name <n> [opts]    slots keep their recipe link). Select by --name OR
+                              --id; with --id, --name renames the meal.
   delete --name <n>         Delete a meal by name (errors if the name is ambiguous)
   delete --id <uuid>        Delete a meal by row id
 
@@ -32,7 +35,10 @@ add options:
   --type <type>             meal type: breakfast | lunch | dinner | snack (default dinner)
   --recipe <text>           recipe instructions
   --cal --protein           macros, as numbers
-  --carbs --fat`;
+  --carbs --fat
+
+update options:
+  same fields as add; only the flags you pass change. Pass a macro as "" to clear it.`;
 
 function parseArgs(argv) {
     const args = {};
@@ -95,6 +101,60 @@ async function cmdAdd(args) {
     console.log(`Added "${meal.name}" [${meal.default_meal_type}] — ${data.id}`);
 }
 
+// Resolve a single library row by --id (exact) or --name (case-insensitive,
+// errors if ambiguous). Returns { id, meal }.
+async function resolveTarget(args) {
+    const rows = await fetchLibrary();
+    if (typeof args.id === 'string') {
+        const match = rows.find((r) => r.id === args.id);
+        if (!match) throw new Error(`No library meal with id ${args.id}`);
+        return match;
+    }
+    if (typeof args.name !== 'string') {
+        throw new Error('need --id <uuid> or --name "Meal Name"');
+    }
+    const target = args.name.toLowerCase();
+    const matches = rows.filter(
+        (r) => r.meal && typeof r.meal.name === 'string' && r.meal.name.toLowerCase() === target
+    );
+    if (matches.length === 0) throw new Error(`No library meal named "${args.name}"`);
+    if (matches.length > 1) {
+        throw new Error(`"${args.name}" is ambiguous (${matches.length} matches) — use --id: ${matches.map((m) => m.id).join(', ')}`);
+    }
+    return matches[0];
+}
+
+async function cmdUpdate(args) {
+    const target = await resolveTarget(args);
+
+    const changes = {};
+    // When selecting by --name, --name IS the selector, not a rename. Only treat
+    // --name as a new name when the row was selected by --id.
+    if (typeof args.id === 'string' && typeof args.name === 'string') changes.name = args.name;
+    if (typeof args.recipe === 'string') changes.recipe = args.recipe;
+    if (typeof args.type === 'string') changes.default_meal_type = args.type;
+
+    const macros = {};
+    let hasMacro = false;
+    for (const k of ['cal', 'protein', 'carbs', 'fat']) {
+        if (Object.prototype.hasOwnProperty.call(args, k)) { macros[k] = args[k]; hasMacro = true; }
+    }
+    if (hasMacro) changes.macros = macros;
+
+    if (Object.keys(changes).length === 0) {
+        throw new Error('nothing to update — pass --recipe, --name, --type, or a macro flag');
+    }
+
+    const updated = MealsCore.updateLibraryMeal(target.meal, changes);
+    const { error } = await supabase
+        .from(DB_TABLE)
+        .update({ content: MealsCore.serialize(updated) })
+        .eq('id', target.id)
+        .eq('list_name', LIST);
+    if (error) throw error;
+    console.log(`Updated "${updated.name}" [${updated.default_meal_type}] — ${target.id}`);
+}
+
 async function cmdDelete(args) {
     let id = typeof args.id === 'string' ? args.id : null;
     if (!id) {
@@ -124,7 +184,7 @@ async function main() {
         console.log(USAGE);
         return;
     }
-    if (!['list', 'add', 'delete'].includes(command)) {
+    if (!['list', 'add', 'update', 'delete'].includes(command)) {
         console.error(`Unknown command: ${command}\n`);
         console.log(USAGE);
         process.exitCode = 1;
@@ -136,6 +196,7 @@ async function main() {
 
     if (command === 'list') await cmdList();
     else if (command === 'add') await cmdAdd(args);
+    else if (command === 'update') await cmdUpdate(args);
     else if (command === 'delete') await cmdDelete(args);
 }
 

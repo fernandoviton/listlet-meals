@@ -186,6 +186,36 @@ var MealsCore = (function() {
         };
     }
 
+    // Merge `changes` onto an existing parsed library meal, keeping its id-bearing
+    // row stable. Only fields present in `changes` override; macros merge per-key
+    // (pass '' / null for a macro to clear it). Validation is delegated to
+    // makeLibraryMeal so update and add stay in lockstep.
+    function updateLibraryMeal(existing, changes) {
+        if (!existing || existing.kind !== 'meal') {
+            throw new Error('can only update a library meal');
+        }
+        changes = changes || {};
+
+        var macros = {};
+        var baseMacros = existing.macros || {};
+        var changeMacros = changes.macros || {};
+        for (var i = 0; i < MACRO_KEYS.length; i++) {
+            var key = MACRO_KEYS[i];
+            macros[key] = Object.prototype.hasOwnProperty.call(changeMacros, key)
+                ? changeMacros[key]
+                : baseMacros[key];
+        }
+
+        return makeLibraryMeal({
+            name: changes.name !== undefined ? changes.name : existing.name,
+            recipe: changes.recipe !== undefined ? changes.recipe : existing.recipe,
+            default_meal_type: changes.default_meal_type !== undefined
+                ? changes.default_meal_type
+                : existing.default_meal_type,
+            macros: macros
+        });
+    }
+
     return {
         parseContent: parseContent,
         serialize: serialize,
@@ -197,7 +227,8 @@ var MealsCore = (function() {
         summarizeMacros: summarizeMacros,
         summarizeLibrary: summarizeLibrary,
         filterSlotsByType: filterSlotsByType,
-        makeLibraryMeal: makeLibraryMeal
+        makeLibraryMeal: makeLibraryMeal,
+        updateLibraryMeal: updateLibraryMeal
     };
 })();
 

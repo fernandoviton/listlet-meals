@@ -56,10 +56,13 @@ There is **no browser UI for adding/editing/deleting library meals yet** — use
 node scripts/library.js list
 node scripts/library.js add --name "Oatmeal" --type breakfast \
      --recipe "Cook oats with milk." --cal 320 --protein 12 --carbs 55 --fat 6
+node scripts/library.js update --name "Oatmeal" --recipe "Cook oats with milk." --cal 350
+node scripts/library.js update --id <uuid> --name "Steel-cut Oats"   # rename
 node scripts/library.js delete --name "Oatmeal"     # or --id <uuid>
 ```
 
 - `--type` is one of `breakfast|lunch|dinner|snack` (default `dinner`); all macros are optional. `add` builds `content` via `MealsCore.makeLibraryMeal`.
+- **To edit a meal use `update`, never delete+re-add.** `update` rewrites the row's `content` (via `MealsCore.updateLibraryMeal`) while keeping the same `id`, so week slots that point at it keep their live recipe link. Select by `--name` or `--id`; only the flags you pass change (pass a macro as `""` to clear it), and with `--id` a `--name` renames the meal. A delete+re-add assigns a new `id` and orphans the recipe of any already-placed week slot (name/macros still show from the slot snapshot, but expanding shows "(no recipe)").
 - Writes to the real Supabase `listlet_meals` table (`list_name='library'`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.
 - Requires `.env` (see `.env.example`) with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_REFRESH_TOKEN`. **If you (Claude) hit an auth error**, the token is missing/expired — ask the user to run `node scripts/google-login.js` once (it needs a browser OAuth round-trip you can't perform).
 

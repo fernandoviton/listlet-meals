@@ -398,4 +398,53 @@ describe('meals-core', () => {
             }).macros).toEqual({ cal: 100 });
         });
     });
+
+    describe('updateLibraryMeal', () => {
+        const base = {
+            kind: 'meal',
+            name: 'Oatmeal',
+            recipe: 'Cook oats.',
+            default_meal_type: 'breakfast',
+            macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
+        };
+
+        test('overrides only the provided fields, leaving the rest intact', () => {
+            expect(MealsCore.updateLibraryMeal(base, { recipe: 'Cook oats with milk.' })).toEqual({
+                kind: 'meal',
+                name: 'Oatmeal',
+                recipe: 'Cook oats with milk.',
+                default_meal_type: 'breakfast',
+                macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
+            });
+        });
+
+        test('merges macros per-key without dropping untouched ones', () => {
+            expect(MealsCore.updateLibraryMeal(base, { macros: { cal: 400 } }).macros)
+                .toEqual({ cal: 400, protein: 12, carbs: 55, fat: 6 });
+        });
+
+        test('clears a macro when passed an empty string or null', () => {
+            expect(MealsCore.updateLibraryMeal(base, { macros: { fat: '' } }).macros)
+                .toEqual({ cal: 320, protein: 12, carbs: 55 });
+        });
+
+        test('can change name and meal type', () => {
+            const out = MealsCore.updateLibraryMeal(base, { name: '  Steel-cut Oats  ', default_meal_type: 'snack' });
+            expect(out.name).toBe('Steel-cut Oats');
+            expect(out.default_meal_type).toBe('snack');
+        });
+
+        test('validates through makeLibraryMeal (bad meal type throws)', () => {
+            expect(() => MealsCore.updateLibraryMeal(base, { default_meal_type: 'brunch' })).toThrow(/meal type/i);
+        });
+
+        test('throws when name would become blank', () => {
+            expect(() => MealsCore.updateLibraryMeal(base, { name: '   ' })).toThrow(/name/i);
+        });
+
+        test('throws when the existing row is not a meal', () => {
+            expect(() => MealsCore.updateLibraryMeal({ kind: 'slot' }, { recipe: 'x' })).toThrow(/meal/i);
+            expect(() => MealsCore.updateLibraryMeal(null, { recipe: 'x' })).toThrow(/meal/i);
+        });
+    });
 });
