@@ -34,7 +34,7 @@ jobs:
 
       - name: Inject Supabase secrets into config.js
         run: |
-          sed -i "s|SUPABASE_URL: ''|SUPABASE_URL: '${{ secrets.SUPABASE_URL }}'|; s|SUPABASE_PUBLISHABLE_KEY: ''|SUPABASE_PUBLISHABLE_KEY: '${{ secrets.SUPABASE_PUBLISHABLE_KEY }}'|" config.js
+          sed -i "s|SUPABASE_URL: ''|SUPABASE_URL: '${{ vars.SUPABASE_URL }}'|; s|SUPABASE_PUBLISHABLE_KEY: ''|SUPABASE_PUBLISHABLE_KEY: '${{ vars.SUPABASE_PUBLISHABLE_KEY }}'|" config.js
 
       - name: Verify config.js was populated
         run: |
