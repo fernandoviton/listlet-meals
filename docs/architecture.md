@@ -6,7 +6,7 @@ Living reference for how `listlet-meals` is wired together. Update on each commi
 
 A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter kit. Two pages, selected by the `?list=` query parameter:
 
-- `?list=library` — meal definitions (name, recipe, default meal type, macros).
+- `?list=library` — meal definitions (name, structured recipe, default meal type, macros).
 - `?list=week` — planned slots in a hypothetical 7-day week (sat → fri).
 
 `index.html` boots in this order: shared infra (`shared/*.js`) → `meals-core.js` → `view/utils.js` → `view/library.js` → `view/week.js` → `app.js` → `Auth.init` callback that renders `Header`, runs `App.ensureMockSeed`, then either `App.init` (when a list is in the URL) or `Home.render`. `App.init` dispatches to `LibraryView.init` or `WeekView.init` based on `listName`.
@@ -25,7 +25,8 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 │   week.js     — WeekView: renders ?list=week (planner,   │
 │                 drag-and-drop, picker, slot cards)       │
 │   utils.js    — ViewUtils: presentation helpers          │
-│                 (formatMacros). Pure, Jest-required.     │
+│                 (formatMacros, formatQuantity,           │
+│                 renderRecipeHtml). Pure, Jest-required.  │
 │                                                          │
 │   View modules own DOM render + event wiring + their own │
 │   in-memory items copy. They call into MealsCore for     │
@@ -59,6 +60,19 @@ The shared backend only persists a `content` string per item. We JSON-encode mea
 { kind: "meal", name, recipe, default_meal_type, macros: { cal?, protein?, carbs?, fat? } }
 ```
 
+`recipe` is a **structured object**, not a string:
+```js
+recipe: {
+  ingredients: [
+    { qty: 200,  unit: "g",     item: "pasta" },
+    { qty: 0.5,  unit: "cup",   item: "parmesan", note: "grated" },
+    { qty: null, unit: null,    item: "salt",     note: "to taste" }  // qty:null never scales
+  ],
+  steps: ["Boil salted water.", "Cook pasta 10 min."]
+}
+```
+Quantities are plain decimals (fractions are a render concern). Macros are **per serving** (= per ×1 batch); the recipe modal's ×N stepper scales the ingredient display and the macro display (`macro × N`) at render time only — stored values never change.
+
 **Week item content** (`?list=week`):
 ```js
 { kind: "slot", library_id, day, meal_type, order, name_snapshot, macros_snapshot }
@@ -85,14 +99,17 @@ Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test
 - `summarizeMacros(slots)` → totals object (only keys that appeared)
 - `summarizeLibrary(items)` → `[{ id, name, default_meal_type }]` sorted by name
 - `filterSlotsByType(slots, type)` — `'all'` passes through
-- `makeLibraryMeal(input)` → library `content` object `{ kind:'meal', name, recipe, default_meal_type, macros }`. Requires a non-blank `name`, defaults `default_meal_type` to `dinner` (throws on an unknown type), defaults `recipe` to `''`, and keeps only macro keys whose value coerces to a finite number. Used by the `scripts/library.js` CLI.
-- `updateLibraryMeal(existing, changes)` → merges `changes` onto an existing parsed meal and returns a fresh `content` object. Only fields present in `changes` override; macros merge per-key (pass `''`/`null` to clear one). Validation is delegated to `makeLibraryMeal`. Lets the CLI edit a row **in place** (stable `id`) so placed week slots keep their recipe link.
+- `makeLibraryMeal(input)` → library `content` object `{ kind:'meal', name, recipe, default_meal_type, macros }`. Requires a non-blank `name`, defaults `default_meal_type` to `dinner` (throws on an unknown type), runs `input.recipe` through an internal `normalizeRecipe` (always a `{ ingredients, steps }` object — coerces `qty` to number/`null`, defaults `unit` to `null`, drops item-less ingredients and blank steps; a missing or non-object recipe → `{ ingredients: [], steps: [] }`), and keeps only macro keys whose value coerces to a finite number. Used by the `scripts/library.js` CLI.
+- `updateLibraryMeal(existing, changes)` → merges `changes` onto an existing parsed meal and returns a fresh `content` object. Only fields present in `changes` override; macros merge per-key (pass `''`/`null` to clear one); a `changes.recipe` flows through `normalizeRecipe` via `makeLibraryMeal`. Validation is delegated to `makeLibraryMeal`. Lets the CLI edit a row **in place** (stable `id`) so placed week slots keep their recipe link.
+- `scaleRecipe(recipe, factor)` → a new (non-mutating) recipe with each numeric ingredient `qty` multiplied by `factor` (`null` qty stays `null`; units/items/notes/steps untouched). Tolerates a missing / `null` / `{}` recipe (returns `{ ingredients: [], steps: [] }`), since `getLibraryMeal` returns `{}` for an orphaned slot.
 
 ## `ViewUtils` surface
 
 Defined in `view/utils.js`. Pure presentation helpers, covered by `tests/unit/view-utils.test.js`.
 
 - `formatMacros(m)` → `'500 cal • 20g P • 50g C • 10g F'` (skips missing / non-numeric keys, no leading/trailing separator, empty string for null / `{}`).
+- `formatQuantity(num)` → decimal rendered as a nice fraction: whole part + nearest snapped vulgar fraction (⅛ ¼ ⅓ ⅜ ½ ⅝ ⅔ ¾ ⅞) within a tight tolerance, else a ≤2dp decimal. `1.5 → "1½"`, `2/3 → "⅔"`, `0.2 → "0.2"`, `null → ""`.
+- `renderRecipeHtml(recipe, factor)` → an already-escaped HTML string (a `.recipe-ingredients` list + numbered `.recipe-steps` list) shared by the library card (×1) and the week modal (×N). Scales numeric quantities by `factor` (qty:`null` rows show just item/note). Missing / null / `{}` / empty recipe → `(no recipe)`. Self-contained (a local `esc()`, no browser globals) so it `require()`s standalone under Jest.
 
 ## `app.js` responsibilities
 
@@ -120,7 +137,7 @@ Each day column renders four meal-type sections (`breakfast`, `lunch`, `dinner`,
 
 ### Slot card interactions
 
-The slot card has two affordances: the card body opens the recipe modal on `click`, and a small iOS-style `.slot-grab` handle on the right starts a drag on `pointerdown`. The modal contains the meal name, macros, recipe, and a destructive **Delete** action. Drag changes both day and meal_type by dropping into a target `.meal-section`.
+The slot card has two affordances: the card body opens the recipe modal on `click`, and a small iOS-style `.slot-grab` handle on the right starts a drag on `pointerdown`. The modal contains the meal name, the (per-serving) macro line, a `− ×N +` scale stepper, the recipe (rendered via `ViewUtils.renderRecipeHtml`), and a destructive **Delete** action. The recipe is fetched async after the modal opens; the stepper is enabled only once the fetch resolves and its change handler closes over the resolved recipe + the slot's raw `macros_snapshot` (`dialog.dataset.factor` holds only the integer N), re-rendering ingredients via `renderRecipeHtml(recipe, N)` and the macro line via `formatMacros(macros × N)`. Drag changes both day and meal_type by dropping into a target `.meal-section`.
 
 ### Drag-and-drop
 
@@ -148,7 +165,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 
 Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
 
-- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
+- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
 - `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
 - `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
 
@@ -157,7 +174,7 @@ Node scripts for tasks the browser app has no UI for yet — currently managing 
 ## Tests
 
 - `tests/unit/meals-core.test.js` — Jest, pure-function coverage of `MealsCore`.
-- `tests/unit/view-utils.test.js` — Jest, pure-function coverage of `ViewUtils.formatMacros`.
+- `tests/unit/view-utils.test.js` — Jest, pure-function coverage of `ViewUtils.formatMacros`, `formatQuantity`, and `renderRecipeHtml`.
 - `tests/e2e/*.spec.js` — Playwright, drives the real DOM in mock mode (seed, planner, library, filter, picker, meal-type, delete, touch-drag).
 - `npm test` / `npm run test:e2e` / `npm run test:all`.
 
@@ -170,7 +187,7 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `index.html` | Script tags + boot script |
 | `meals-core.js` | Pure logic, the only place state transitions live |
 | `app.js` | Shell: dispatch by `?list=`, mock-mode seed |
-| `view/utils.js` | `ViewUtils` — shared view-layer helpers (`formatMacros`) |
+| `view/utils.js` | `ViewUtils` — shared view-layer helpers (`formatMacros`, `formatQuantity`, `renderRecipeHtml`) |
 | `view/library.js` | `LibraryView` — renders `?list=library` |
 | `view/week.js` | `WeekView` — renders `?list=week` (grid, drag, picker, cards) |
 | `app.css` | App-specific styles |

@@ -25,3 +25,89 @@ describe('ViewUtils.formatMacros', () => {
             .toBe('20g P');
     });
 });
+
+describe('ViewUtils.formatQuantity', () => {
+    test('whole numbers render without a fraction', () => {
+        expect(ViewUtils.formatQuantity(2)).toBe('2');
+        expect(ViewUtils.formatQuantity(0)).toBe('0');
+    });
+
+    test('clean halves / quarters / thirds snap to unicode fractions', () => {
+        expect(ViewUtils.formatQuantity(1.5)).toBe('1½');
+        expect(ViewUtils.formatQuantity(0.5)).toBe('½');
+        expect(ViewUtils.formatQuantity(0.25)).toBe('¼');
+        expect(ViewUtils.formatQuantity(0.75)).toBe('¾');
+        expect(ViewUtils.formatQuantity(2.75)).toBe('2¾');
+        expect(ViewUtils.formatQuantity(2 / 3)).toBe('⅔');
+        expect(ViewUtils.formatQuantity(1 / 3)).toBe('⅓');
+    });
+
+    test('a decimal with no clean fraction falls back to ≤2dp', () => {
+        expect(ViewUtils.formatQuantity(0.2)).toBe('0.2');
+        expect(ViewUtils.formatQuantity(1.23)).toBe('1.23');
+    });
+
+    test('null / undefined render as empty string', () => {
+        expect(ViewUtils.formatQuantity(null)).toBe('');
+        expect(ViewUtils.formatQuantity(undefined)).toBe('');
+    });
+});
+
+describe('ViewUtils.renderRecipeHtml', () => {
+    const recipe = {
+        ingredients: [
+            { qty: 200, unit: 'g', item: 'pasta' },
+            { qty: 0.5, unit: 'cup', item: 'parmesan', note: 'grated' },
+            { qty: null, unit: null, item: 'salt', note: 'to taste' }
+        ],
+        steps: ['Boil water.', 'Cook pasta 10 min.']
+    };
+
+    test('renders an ingredient list and a numbered step list', () => {
+        const html = ViewUtils.renderRecipeHtml(recipe, 1);
+        expect(html).toContain('recipe-ingredients');
+        expect(html).toContain('recipe-steps');
+        expect(html).toContain('200');
+        expect(html).toContain('g');
+        expect(html).toContain('pasta');
+        expect(html).toContain('½');
+        expect(html).toContain('parmesan');
+        expect(html).toContain('grated');
+        expect(html).toContain('Boil water.');
+        expect(html).toContain('Cook pasta 10 min.');
+    });
+
+    test('a qty:null row shows just the item (and note), no qty', () => {
+        const html = ViewUtils.renderRecipeHtml({
+            ingredients: [{ qty: null, unit: null, item: 'salt', note: 'to taste' }],
+            steps: []
+        }, 1);
+        expect(html).toContain('salt');
+        expect(html).toContain('to taste');
+    });
+
+    test('scales numeric quantities by the factor; null qty unchanged', () => {
+        const html = ViewUtils.renderRecipeHtml(recipe, 2);
+        expect(html).toContain('400');
+        expect(html).toContain('1'); // 0.5 cup parmesan ×2 = 1
+        expect(html).toContain('salt');
+    });
+
+    test('escapes its input', () => {
+        const html = ViewUtils.renderRecipeHtml({
+            ingredients: [{ qty: 1, unit: '<b>', item: 'a & b', note: '"x"' }],
+            steps: ['<script>boom</script>']
+        }, 1);
+        expect(html).not.toContain('<script>boom');
+        expect(html).toContain('&lt;script&gt;');
+        expect(html).toContain('a &amp; b');
+        expect(html).toContain('&lt;b&gt;');
+    });
+
+    test('empty / null / undefined / {} recipe renders "(no recipe)"', () => {
+        expect(ViewUtils.renderRecipeHtml({ ingredients: [], steps: [] }, 1)).toBe('(no recipe)');
+        expect(ViewUtils.renderRecipeHtml(null, 1)).toBe('(no recipe)');
+        expect(ViewUtils.renderRecipeHtml(undefined, 1)).toBe('(no recipe)');
+        expect(ViewUtils.renderRecipeHtml({}, 1)).toBe('(no recipe)');
+    });
+});

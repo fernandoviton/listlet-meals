@@ -307,7 +307,7 @@ describe('meals-core', () => {
             const meal = {
                 kind: 'meal',
                 name: 'Oatmeal',
-                recipe: 'Cook oats.',
+                recipe: { ingredients: [{ qty: 50, unit: 'g', item: 'oats' }], steps: ['Cook oats.'] },
                 default_meal_type: 'breakfast',
                 macros: { cal: 300, protein: 10, carbs: 50, fat: 5 }
             };
@@ -338,29 +338,63 @@ describe('meals-core', () => {
     });
 
     describe('makeLibraryMeal', () => {
-        test('builds a full meal object', () => {
+        test('builds a full meal object with a normalized recipe', () => {
             expect(MealsCore.makeLibraryMeal({
                 name: 'Oatmeal',
-                recipe: 'Cook oats.',
+                recipe: {
+                    ingredients: [{ qty: 50, unit: 'g', item: 'oats' }],
+                    steps: ['Cook oats.']
+                },
                 default_meal_type: 'breakfast',
                 macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
             })).toEqual({
                 kind: 'meal',
                 name: 'Oatmeal',
-                recipe: 'Cook oats.',
+                recipe: {
+                    ingredients: [{ qty: 50, unit: 'g', item: 'oats' }],
+                    steps: ['Cook oats.']
+                },
                 default_meal_type: 'breakfast',
                 macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
             });
         });
 
-        test('defaults recipe to empty string and meal_type to dinner', () => {
+        test('defaults recipe to an empty structured recipe and meal_type to dinner', () => {
             expect(MealsCore.makeLibraryMeal({ name: 'Mystery Plate' })).toEqual({
                 kind: 'meal',
                 name: 'Mystery Plate',
-                recipe: '',
+                recipe: { ingredients: [], steps: [] },
                 default_meal_type: 'dinner',
                 macros: {}
             });
+        });
+
+        test('normalizes recipe: coerces qty, defaults unit/note, drops item-less rows and blank steps', () => {
+            expect(MealsCore.makeLibraryMeal({
+                name: 'X',
+                recipe: {
+                    ingredients: [
+                        { qty: '200', unit: 'g', item: 'pasta' },
+                        { qty: 2, unit: 'clove', item: 'garlic', note: 'minced' },
+                        { qty: null, item: 'salt', note: 'to taste' },
+                        { qty: 1, unit: 'cup', item: '   ' },
+                        { unit: 'g' }
+                    ],
+                    steps: ['Boil water.', '', '  ', 'Drain.']
+                }
+            }).recipe).toEqual({
+                ingredients: [
+                    { qty: 200, unit: 'g', item: 'pasta' },
+                    { qty: 2, unit: 'clove', item: 'garlic', note: 'minced' },
+                    { qty: null, unit: null, item: 'salt', note: 'to taste' }
+                ],
+                steps: ['Boil water.', 'Drain.']
+            });
+        });
+
+        test('a non-object recipe (e.g. legacy string) normalizes to empty', () => {
+            expect(MealsCore.makeLibraryMeal({ name: 'X', recipe: 'Cook oats.' }).recipe)
+                .toEqual({ ingredients: [], steps: [] });
         });
 
         test('trims the name', () => {
@@ -403,16 +437,17 @@ describe('meals-core', () => {
         const base = {
             kind: 'meal',
             name: 'Oatmeal',
-            recipe: 'Cook oats.',
+            recipe: { ingredients: [{ qty: 50, unit: 'g', item: 'oats' }], steps: ['Cook oats.'] },
             default_meal_type: 'breakfast',
             macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
         };
 
         test('overrides only the provided fields, leaving the rest intact', () => {
-            expect(MealsCore.updateLibraryMeal(base, { recipe: 'Cook oats with milk.' })).toEqual({
+            const newRecipe = { ingredients: [{ qty: 60, unit: 'g', item: 'oats' }], steps: ['Cook oats with milk.'] };
+            expect(MealsCore.updateLibraryMeal(base, { recipe: newRecipe })).toEqual({
                 kind: 'meal',
                 name: 'Oatmeal',
-                recipe: 'Cook oats with milk.',
+                recipe: { ingredients: [{ qty: 60, unit: 'g', item: 'oats' }], steps: ['Cook oats with milk.'] },
                 default_meal_type: 'breakfast',
                 macros: { cal: 320, protein: 12, carbs: 55, fat: 6 }
             });
@@ -445,6 +480,49 @@ describe('meals-core', () => {
         test('throws when the existing row is not a meal', () => {
             expect(() => MealsCore.updateLibraryMeal({ kind: 'slot' }, { recipe: 'x' })).toThrow(/meal/i);
             expect(() => MealsCore.updateLibraryMeal(null, { recipe: 'x' })).toThrow(/meal/i);
+        });
+    });
+
+    describe('scaleRecipe', () => {
+        const recipe = {
+            ingredients: [
+                { qty: 200, unit: 'g', item: 'pasta' },
+                { qty: 0.5, unit: 'cup', item: 'parmesan', note: 'grated' },
+                { qty: null, unit: null, item: 'salt', note: 'to taste' }
+            ],
+            steps: ['Boil water.', 'Cook pasta.']
+        };
+
+        test('multiplies each numeric qty by the factor; null qty stays null', () => {
+            expect(MealsCore.scaleRecipe(recipe, 2)).toEqual({
+                ingredients: [
+                    { qty: 400, unit: 'g', item: 'pasta' },
+                    { qty: 1, unit: 'cup', item: 'parmesan', note: 'grated' },
+                    { qty: null, unit: null, item: 'salt', note: 'to taste' }
+                ],
+                steps: ['Boil water.', 'Cook pasta.']
+            });
+        });
+
+        test('factor 1 is an identity (by value)', () => {
+            expect(MealsCore.scaleRecipe(recipe, 1)).toEqual(recipe);
+        });
+
+        test('handles a fractional factor', () => {
+            expect(MealsCore.scaleRecipe(recipe, 0.5).ingredients[0].qty).toBe(100);
+        });
+
+        test('does not mutate the input', () => {
+            const copy = JSON.parse(JSON.stringify(recipe));
+            MealsCore.scaleRecipe(recipe, 3);
+            expect(recipe).toEqual(copy);
+        });
+
+        test('tolerates a missing / null / empty recipe', () => {
+            const empty = { ingredients: [], steps: [] };
+            expect(MealsCore.scaleRecipe(undefined, 2)).toEqual(empty);
+            expect(MealsCore.scaleRecipe(null, 2)).toEqual(empty);
+            expect(MealsCore.scaleRecipe({}, 2)).toEqual(empty);
         });
     });
 });

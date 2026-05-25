@@ -497,13 +497,58 @@ dialog::backdrop {
 }
 .dialog-macros:empty { display: none; }
 .dialog-recipe {
-    white-space: pre-wrap;
     line-height: 1.6;
     color: var(--ink-2);
     font-size: 0.95rem;
     font-family: var(--serif);
     font-weight: 400;
     padding-bottom: 0.5rem;
+}
+
+/* ===== Recipe scale stepper (modal only) ===== */
+.recipe-scale {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+}
+.recipe-scale[hidden] { display: none; }
+.recipe-scale .scale-label {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.recipe-scale .scale-value {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--ink);
+    min-width: 2.2ch;
+    text-align: center;
+}
+.recipe-scale .scale-dec,
+.recipe-scale .scale-inc {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--paper-2);
+    color: var(--ink);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.recipe-scale .scale-dec:hover,
+.recipe-scale .scale-inc:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
 }
 
 .dialog-actions {
@@ -674,11 +719,43 @@ dialog::backdrop {
 }
 
 .library-recipe {
-    white-space: pre-wrap;
     line-height: 1.6;
     font-family: var(--serif);
     font-weight: 400;
     color: var(--ink-2);
+}
+
+/* ===== Structured recipe (shared by library card + recipe modal) ===== */
+.recipe-ingredients {
+    list-style: none;
+    margin: 0 0 0.9rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.recipe-ingredients li {
+    line-height: 1.45;
+}
+.recipe-ingredients .ing-qty {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--tomato);
+}
+.recipe-ingredients .ing-note {
+    color: var(--muted);
+    font-style: italic;
+}
+.recipe-steps {
+    margin: 0;
+    padding-left: 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.recipe-steps li {
+    line-height: 1.5;
+    padding-left: 0.2rem;
 }
 
 /* =========================================================================

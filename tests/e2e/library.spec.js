@@ -17,12 +17,20 @@ function libraryItem(id, name, recipe, macros) {
     };
 }
 
+const PASTA_RECIPE = {
+    ingredients: [
+        { qty: 200, unit: 'g', item: 'pasta' },
+        { qty: null, unit: null, item: 'salt', note: 'to taste' }
+    ],
+    steps: ['Boil water.', 'Add pasta.']
+};
+
 test('library shows name, macros, and expandable recipe (no add-to-week UI)', async ({ page }) => {
     await page.goto('/');
     await page.evaluate((items) => {
         localStorage.clear();
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(items));
-    }, [libraryItem('lib-pasta', 'Pasta', 'Boil water.\nAdd pasta.', { cal: 500, protein: 20 })]);
+    }, [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE, { cal: 500, protein: 20 })]);
 
     await page.goto('/?list=library');
 
@@ -41,7 +49,9 @@ test('library shows name, macros, and expandable recipe (no add-to-week UI)', as
 
     await page.locator('.library-card').click();
     await expect(recipe).toBeVisible();
-    await expect(recipe).toContainText('Boil water.');
+    // Structured recipe: ingredient list + numbered steps.
+    await expect(recipe.locator('.recipe-ingredients li').first()).toContainText('pasta');
+    await expect(recipe.locator('.recipe-steps li').first()).toContainText('Boil water.');
 
     await page.locator('.library-card').click();
     await expect(recipe).toBeHidden();

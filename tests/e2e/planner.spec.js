@@ -80,10 +80,18 @@ test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page
     await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Pasta');
 });
 
+const PASTA_RECIPE = {
+    ingredients: [
+        { qty: 200, unit: 'g', item: 'pasta' },
+        { qty: null, unit: null, item: 'salt', note: 'to taste' }
+    ],
+    steps: ['Boil water.', 'Add pasta.', 'Drain.']
+};
+
 test('clicking a slot card opens the recipe modal', async ({ page }) => {
     await seed(page,
         [slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta' })],
-        [libraryItem('lib-pasta', 'Pasta', 'Boil water. Add pasta. Drain.')]
+        [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE)]
     );
     await page.goto('/?list=week');
 
@@ -94,8 +102,60 @@ test('clicking a slot card opens the recipe modal', async ({ page }) => {
     await card.locator('.slot-name').click();
     await expect(dialog).toHaveAttribute('open', '');
     await expect(dialog.locator('h2')).toHaveText('Pasta');
-    await expect(dialog.locator('.dialog-recipe')).toHaveText('Boil water. Add pasta. Drain.');
+    // Recipe renders as structured ingredient + step lists.
+    await expect(dialog.locator('.dialog-recipe .recipe-ingredients li').first()).toContainText('pasta');
+    await expect(dialog.locator('.dialog-recipe .recipe-steps li')).toHaveText([
+        'Boil water.', 'Add pasta.', 'Drain.'
+    ]);
 
     await page.keyboard.press('Escape');
     await expect(dialog).not.toHaveAttribute('open', '');
+});
+
+test('a slot added via the picker from the real demo seed shows its recipe', async ({ page }) => {
+    // Mirror the real GUI path: fresh localStorage → app auto-seeds the demo
+    // library → add a meal via the picker → open the slot modal.
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.goto('/?list=week');
+
+    await page.locator('.day-column[data-day="wed"] .day-add').click();
+    await page.locator('#picker-dialog .picker-meal', { hasText: 'Oatmeal' }).click();
+
+    const dialog = page.locator('#recipe-dialog');
+    await page.locator('.day-column[data-day="wed"] .slot-card .slot-name').click();
+    await expect(dialog).toHaveAttribute('open', '');
+
+    // Scale control AND recipe should both be present.
+    await expect(dialog.locator('.recipe-scale')).toBeVisible();
+    await expect(dialog.locator('.dialog-recipe .recipe-ingredients li').first()).toBeVisible();
+    await expect(dialog.locator('.dialog-recipe')).not.toHaveText('(no recipe)');
+});
+
+test('the ×N stepper scales ingredient quantities and the macro line', async ({ page }) => {
+    await seed(page,
+        [slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta', macros: { cal: 500, protein: 20 } })],
+        [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE, { macros: { cal: 500, protein: 20 } })]
+    );
+    await page.goto('/?list=week');
+
+    const dialog = page.locator('#recipe-dialog');
+    await page.locator('.day-column[data-day="mon"] .slot-card .slot-name').click();
+    await expect(dialog).toHaveAttribute('open', '');
+
+    const firstIng = dialog.locator('.dialog-recipe .recipe-ingredients li').first();
+    const macros = dialog.locator('.dialog-macros');
+
+    // ×1 — per-serving.
+    await expect(firstIng).toContainText('200');
+    await expect(macros).toContainText('500 cal');
+    await expect(macros).toContainText('20g P');
+
+    // Bump to ×2 — quantities and macros double; the "to taste" row is unchanged.
+    await dialog.locator('.recipe-scale .scale-inc').click();
+    await expect(dialog.locator('.recipe-scale .scale-value')).toHaveText('×2');
+    await expect(firstIng).toContainText('400');
+    await expect(macros).toContainText('1000 cal');
+    await expect(macros).toContainText('40g P');
+    await expect(dialog.locator('.dialog-recipe .recipe-ingredients li').nth(1)).toContainText('to taste');
 });

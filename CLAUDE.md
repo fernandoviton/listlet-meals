@@ -18,6 +18,12 @@ The shared API persists `content` only. We use two lists (via `?list=`) and stor
   ```
   { kind: "meal", name, recipe, default_meal_type, macros: { cal?, protein?, carbs?, fat? } }
   ```
+  `recipe` is a **structured object**, not a string:
+  ```
+  { ingredients: [ { qty: <number|null>, unit: <string|null>, item: <string>, note?: <string> } ],
+    steps: [ <string> ] }
+  ```
+  Quantities are plain decimals (fractions are render-only). Macros are **per serving** (×1); the recipe modal's ×N stepper scales the ingredient + macro *display* only (`macro × N`), never stored values. `qty: null` rows ("to taste") never scale.
 - `?list=week` — planned slots in the hypothetical week
   ```
   { kind: "slot", library_id, day, meal_type, order, name_snapshot, macros_snapshot }
@@ -35,7 +41,7 @@ Days: `["sat","sun","mon","tue","wed","thu","fri"]`. Any macro field may be `nul
 
 ## File Structure
 
-- `meals-core.js` — pure logic (parseContent, serialize, nextOrder, addSlot, moveSlot, summarizeMacros, filterSlotsByType, makeLibraryMeal). Loaded in browser and required by Jest. Covered by `tests/unit/meals-core.test.js`.
+- `meals-core.js` — pure logic (parseContent, serialize, nextOrder, addSlot, moveSlot, summarizeMacros, filterSlotsByType, makeLibraryMeal, scaleRecipe). Loaded in browser and required by Jest. Covered by `tests/unit/meals-core.test.js`.
 - `app.js` — DOM/render/event-wiring. Calls into `MealsCore` for every state transformation.
 - `app.css` — styles.
 - `shared/` — Shared infrastructure. **Do not edit.**
@@ -54,13 +60,15 @@ There is **no browser UI for adding/editing/deleting library meals yet** — use
 
 ```
 node scripts/library.js list
-node scripts/library.js add --name "Oatmeal" --type breakfast \
-     --recipe "Cook oats with milk." --cal 320 --protein 12 --carbs 55 --fat 6
-node scripts/library.js update --name "Oatmeal" --recipe "Cook oats with milk." --cal 350
-node scripts/library.js update --id <uuid> --name "Steel-cut Oats"   # rename
+node scripts/library.js add --file oatmeal.json
+node scripts/library.js add --name "Oatmeal" --type breakfast --cal 320   # quick, no recipe
+node scripts/library.js update --name "Oatmeal" --file oatmeal.json       # replace recipe + fields
+node scripts/library.js update --name "Oatmeal" --cal 350                 # quick scalar edit
+node scripts/library.js update --id <uuid> --name "Steel-cut Oats"        # rename
 node scripts/library.js delete --name "Oatmeal"     # or --id <uuid>
 ```
 
+- **`--file <path.json>` is how you add/update a recipe** — a whole-meal JSON document `{ name, type, macros, recipe }` where `recipe` is the structured `{ ingredients, steps }` object (see the data model above). The file's CLI-friendly `type` is mapped to `default_meal_type` before calling core. Scalar flags (`--name`/`--type`/`--cal`/…) override the file's fields, so `--file` + a flag is fine for tweaks. There is no `--recipe` flag.
 - `--type` is one of `breakfast|lunch|dinner|snack` (default `dinner`); all macros are optional. `add` builds `content` via `MealsCore.makeLibraryMeal`.
 - **To edit a meal use `update`, never delete+re-add.** `update` rewrites the row's `content` (via `MealsCore.updateLibraryMeal`) while keeping the same `id`, so week slots that point at it keep their live recipe link. Select by `--name` or `--id`; only the flags you pass change (pass a macro as `""` to clear it), and with `--id` a `--name` renames the meal. A delete+re-add assigns a new `id` and orphans the recipe of any already-placed week slot (name/macros still show from the slot snapshot, but expanding shows "(no recipe)").
 - Writes to the real Supabase `listlet_meals` table (`list_name='library'`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.

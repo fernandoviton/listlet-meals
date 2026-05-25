@@ -434,28 +434,79 @@ var WeekView = (function() {
         var dialog = document.getElementById('recipe-dialog');
         var bodyEl = dialog.querySelector('.dialog-body');
         dialog.dataset.slotId = id;
+        dialog.dataset.factor = '1';
+        var rawMacros = currentSlotMacrosRaw(id);
         bodyEl.innerHTML =
             '<h2>' + escapeHtml(name) + '</h2>' +
-            '<div class="dialog-macros">' + escapeHtml(currentSlotMacros(id)) + '</div>' +
+            '<div class="dialog-macros">' + escapeHtml(ViewUtils.formatMacros(rawMacros)) + '</div>' +
+            '<div class="recipe-scale" hidden>' +
+                '<span class="scale-label">Scale</span>' +
+                '<button type="button" class="scale-dec" aria-label="Fewer servings">−</button>' +
+                '<span class="scale-value">×1</span>' +
+                '<button type="button" class="scale-inc" aria-label="More servings">+</button>' +
+            '</div>' +
             '<div class="dialog-recipe">Loading…</div>';
         if (typeof dialog.showModal === 'function') dialog.showModal();
+
+        var recipeEl = bodyEl.querySelector('.dialog-recipe');
+        var macrosEl = bodyEl.querySelector('.dialog-macros');
+        var scaleEl = bodyEl.querySelector('.recipe-scale');
+        var valueEl = scaleEl.querySelector('.scale-value');
+
+        var recipe = {};
         try {
             var meal = await getLibraryMeal(libraryId);
-            bodyEl.querySelector('.dialog-recipe').textContent = meal.recipe || '(no recipe)';
+            recipe = meal.recipe || {};
         } catch (err) {
-            bodyEl.querySelector('.dialog-recipe').textContent = '(no recipe)';
+            recipe = {};
         }
+        // The user may have opened a different slot while we awaited the fetch.
+        if (dialog.dataset.slotId !== id) return;
+
+        // Closure over the resolved recipe + the slot's raw macros — dataset holds
+        // only the integer factor as a string.
+        function rerender() {
+            var n = parseInt(dialog.dataset.factor, 10) || 1;
+            recipeEl.innerHTML = ViewUtils.renderRecipeHtml(recipe, n);
+            macrosEl.textContent = ViewUtils.formatMacros(scaleMacros(rawMacros, n));
+            valueEl.textContent = '×' + n;
+        }
+
+        scaleEl.querySelector('.scale-dec').addEventListener('click', function() {
+            var n = Math.max(1, (parseInt(dialog.dataset.factor, 10) || 1) - 1);
+            dialog.dataset.factor = String(n);
+            rerender();
+        });
+        scaleEl.querySelector('.scale-inc').addEventListener('click', function() {
+            var n = (parseInt(dialog.dataset.factor, 10) || 1) + 1;
+            dialog.dataset.factor = String(n);
+            rerender();
+        });
+
+        scaleEl.hidden = false;
+        rerender();
     }
 
-    function currentSlotMacros(id) {
+    // Multiply each present numeric macro by an integer factor (per-serving stays
+    // per-serving at ×1). Returns a fresh object for ViewUtils.formatMacros.
+    function scaleMacros(macros, factor) {
+        var out = {};
+        if (!macros) return out;
+        var keys = ['cal', 'protein', 'carbs', 'fat'];
+        for (var i = 0; i < keys.length; i++) {
+            var v = macros[keys[i]];
+            if (typeof v === 'number') out[keys[i]] = v * factor;
+        }
+        return out;
+    }
+
+    function currentSlotMacrosRaw(id) {
         for (var i = 0; i < items.length; i++) {
             if (items[i].id !== id) continue;
             var parsed = MealsCore.parseContent(items[i].content);
-            if (parsed && parsed.macros_snapshot) {
-                return ViewUtils.formatMacros(parsed.macros_snapshot);
-            }
+            if (parsed && parsed.macros_snapshot) return parsed.macros_snapshot;
         }
-        return '';
+        return {};
     }
 
     async function onDialogDelete() {

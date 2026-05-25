@@ -157,6 +157,67 @@ var MealsCore = (function() {
     var MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
     var MACRO_KEYS = ['cal', 'protein', 'carbs', 'fat'];
 
+    // Coerce any input into the canonical structured recipe shape:
+    // { ingredients: [{ qty:<number|null>, unit:<string|null>, item:<string>, note?:<string> }], steps: [<non-empty string>] }.
+    // A non-object input (e.g. a legacy recipe string) or a missing recipe yields
+    // an empty recipe. Ingredient rows with no `item` are dropped; blank steps too.
+    function normalizeRecipe(input) {
+        var out = { ingredients: [], steps: [] };
+        if (!input || typeof input !== 'object') return out;
+
+        if (Array.isArray(input.ingredients)) {
+            for (var i = 0; i < input.ingredients.length; i++) {
+                var ing = input.ingredients[i];
+                if (!ing || typeof ing !== 'object') continue;
+                var item = typeof ing.item === 'string' ? ing.item.trim() : '';
+                if (!item) continue;
+
+                var qty = null;
+                if (ing.qty !== null && ing.qty !== undefined && ing.qty !== '') {
+                    var num = Number(ing.qty);
+                    if (!isNaN(num)) qty = num;
+                }
+
+                var norm = {
+                    qty: qty,
+                    unit: (typeof ing.unit === 'string' && ing.unit.trim() !== '') ? ing.unit : null,
+                    item: item
+                };
+                if (typeof ing.note === 'string' && ing.note.trim() !== '') norm.note = ing.note;
+                out.ingredients.push(norm);
+            }
+        }
+
+        if (Array.isArray(input.steps)) {
+            for (var j = 0; j < input.steps.length; j++) {
+                var step = input.steps[j];
+                if (typeof step === 'string' && step.trim() !== '') out.steps.push(step);
+            }
+        }
+
+        return out;
+    }
+
+    // Pure, non-mutating: returns a recipe whose ingredient quantities are scaled
+    // by `factor` (null qty stays null; units/items/notes/steps untouched).
+    // Tolerates a missing / null / {} recipe (getLibraryMeal returns {} for orphaned
+    // slots) by returning an empty recipe.
+    function scaleRecipe(recipe, factor) {
+        var base = (recipe && typeof recipe === 'object') ? recipe : {};
+        var ingredients = Array.isArray(base.ingredients) ? base.ingredients : [];
+        var steps = Array.isArray(base.steps) ? base.steps : [];
+        var f = Number(factor);
+        if (isNaN(f)) f = 1;
+        return {
+            ingredients: ingredients.map(function(ing) {
+                var copy = Object.assign({}, ing);
+                if (typeof copy.qty === 'number') copy.qty = copy.qty * f;
+                return copy;
+            }),
+            steps: steps.slice()
+        };
+    }
+
     function makeLibraryMeal(input) {
         input = input || {};
         var name = typeof input.name === 'string' ? input.name.trim() : '';
@@ -180,7 +241,7 @@ var MealsCore = (function() {
         return {
             kind: 'meal',
             name: name,
-            recipe: typeof input.recipe === 'string' ? input.recipe : '',
+            recipe: normalizeRecipe(input.recipe),
             default_meal_type: mealType,
             macros: macros
         };
@@ -228,7 +289,8 @@ var MealsCore = (function() {
         summarizeLibrary: summarizeLibrary,
         filterSlotsByType: filterSlotsByType,
         makeLibraryMeal: makeLibraryMeal,
-        updateLibraryMeal: updateLibraryMeal
+        updateLibraryMeal: updateLibraryMeal,
+        scaleRecipe: scaleRecipe
     };
 })();
 

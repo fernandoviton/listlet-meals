@@ -54,7 +54,7 @@ var LibraryView = (function() {
                     '<span class="library-name">' + escapeHtml(meal.name || '(unnamed)') + '</span>' +
                     '<span class="library-macros">' + escapeHtml(ViewUtils.formatMacros(meal.macros)) + '</span>' +
                     '<div class="library-body" hidden>' +
-                        '<div class="library-recipe">' + escapeHtml(meal.recipe || '(no recipe)') + '</div>' +
+                        '<div class="library-recipe">' + ViewUtils.renderRecipeHtml(meal.recipe, 1) + '</div>' +
                     '</div>' +
                 '</div>';
             }

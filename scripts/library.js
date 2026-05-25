@@ -3,13 +3,19 @@
 // deleting library meals yet, so this is the way in.
 //
 //   node scripts/library.js list
-//   node scripts/library.js add --name "Oatmeal" --type breakfast \
-//        --recipe "Cook oats with milk." --cal 320 --protein 12 --carbs 55 --fat 6
+//   node scripts/library.js add --file pasta.json
+//   node scripts/library.js add --name "Oatmeal" --type breakfast --cal 320
+//   node scripts/library.js update --name "Oatmeal" --file oatmeal.json
 //   node scripts/library.js delete --name "Oatmeal"
 //   node scripts/library.js delete --id <uuid>
 //
+// A --file is a whole-meal JSON document: { name, type, macros, recipe } where
+// `recipe` is the structured { ingredients:[...], steps:[...] } object and `type`
+// is the CLI-friendly alias for default_meal_type.
+//
 // Auth: reuses the stored Google refresh token (see scripts/google-login.js).
 
+const fs = require('fs');
 const MealsCore = require('../meals-core');
 const ViewUtils = require('../view/utils');
 
@@ -31,14 +37,16 @@ Commands:
   delete --id <uuid>        Delete a meal by row id
 
 add options:
-  --name <text>             (required) meal name
+  --file <path.json>        whole-meal JSON ({ name, type, macros, recipe }); the
+                              way to add a recipe. Scalar flags below override it.
+  --name <text>             (required unless --file supplies it) meal name
   --type <type>             meal type: breakfast | lunch | dinner | snack (default dinner)
-  --recipe <text>           recipe instructions
   --cal --protein           macros, as numbers
   --carbs --fat
 
 update options:
-  same fields as add; only the flags you pass change. Pass a macro as "" to clear it.`;
+  --file <path.json>        whole-meal JSON base; scalar flags override its fields.
+  same scalar fields as add; only what you pass changes. Pass a macro as "" to clear it.`;
 
 function parseArgs(argv) {
     const args = {};
@@ -60,6 +68,33 @@ function parseArgs(argv) {
         }
     }
     return { args, positional };
+}
+
+// Read a whole-meal JSON file and map its CLI-friendly `type` alias onto
+// `default_meal_type` (makeLibraryMeal / updateLibraryMeal read default_meal_type,
+// never `type` — feeding `type` straight through silently defaults to dinner).
+function readMealFile(path) {
+    let raw;
+    try {
+        raw = fs.readFileSync(path, 'utf8');
+    } catch (e) {
+        throw new Error(`--file: cannot read "${path}" (${e.message})`);
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        throw new Error(`--file: "${path}" is not valid JSON (${e.message})`);
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error(`--file: "${path}" must contain a JSON object`);
+    }
+    const out = Object.assign({}, parsed);
+    if (out.type !== undefined && out.default_meal_type === undefined) {
+        out.default_meal_type = out.type;
+    }
+    delete out.type;
+    return out;
 }
 
 async function fetchLibrary() {
@@ -86,11 +121,19 @@ async function cmdList() {
 }
 
 async function cmdAdd(args) {
+    const base = typeof args.file === 'string' ? readMealFile(args.file) : {};
+
+    // File macros are the base; explicitly-passed scalar macro flags override.
+    const macros = Object.assign({}, base.macros || {});
+    for (const k of ['cal', 'protein', 'carbs', 'fat']) {
+        if (Object.prototype.hasOwnProperty.call(args, k)) macros[k] = args[k];
+    }
+
     const meal = MealsCore.makeLibraryMeal({
-        name: args.name,
-        recipe: args.recipe,
-        default_meal_type: args.type,
-        macros: { cal: args.cal, protein: args.protein, carbs: args.carbs, fat: args.fat }
+        name: typeof args.name === 'string' ? args.name : base.name,
+        recipe: base.recipe,
+        default_meal_type: typeof args.type === 'string' ? args.type : base.default_meal_type,
+        macros: macros
     });
     const { data, error } = await supabase
         .from(DB_TABLE)
@@ -127,22 +170,30 @@ async function resolveTarget(args) {
 async function cmdUpdate(args) {
     const target = await resolveTarget(args);
 
+    const base = typeof args.file === 'string' ? readMealFile(args.file) : {};
+
+    // Start from the file's fields, then let explicit scalar flags override.
     const changes = {};
+    if (base.name !== undefined) changes.name = base.name;
+    if (base.recipe !== undefined) changes.recipe = base.recipe;
+    if (base.default_meal_type !== undefined) changes.default_meal_type = base.default_meal_type;
+
     // When selecting by --name, --name IS the selector, not a rename. Only treat
     // --name as a new name when the row was selected by --id.
     if (typeof args.id === 'string' && typeof args.name === 'string') changes.name = args.name;
-    if (typeof args.recipe === 'string') changes.recipe = args.recipe;
     if (typeof args.type === 'string') changes.default_meal_type = args.type;
 
-    const macros = {};
-    let hasMacro = false;
+    // File macros base + scalar overrides; passed whole so updateLibraryMeal's
+    // per-key merge preserves any macros neither the file nor a flag touched.
+    const macros = Object.assign({}, base.macros || {});
+    let hasMacro = base.macros !== undefined;
     for (const k of ['cal', 'protein', 'carbs', 'fat']) {
         if (Object.prototype.hasOwnProperty.call(args, k)) { macros[k] = args[k]; hasMacro = true; }
     }
     if (hasMacro) changes.macros = macros;
 
     if (Object.keys(changes).length === 0) {
-        throw new Error('nothing to update — pass --recipe, --name, --type, or a macro flag');
+        throw new Error('nothing to update — pass --file, --name, --type, or a macro flag');
     }
 
     const updated = MealsCore.updateLibraryMeal(target.meal, changes);
