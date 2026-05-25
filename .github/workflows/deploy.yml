@@ -36,6 +36,14 @@ jobs:
         run: |
           sed -i "s|SUPABASE_URL: ''|SUPABASE_URL: '${{ secrets.SUPABASE_URL }}'|; s|SUPABASE_PUBLISHABLE_KEY: ''|SUPABASE_PUBLISHABLE_KEY: '${{ secrets.SUPABASE_PUBLISHABLE_KEY }}'|" config.js
 
+      - name: Verify config.js was populated
+        run: |
+          if grep -qE "SUPABASE_URL: ''|SUPABASE_PUBLISHABLE_KEY: ''" config.js; then
+            echo "::error::config.js still has empty Supabase values after injection — the site would ship in mock mode. Likely cause: the SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY repo secrets are empty or unset (add them under Settings → Secrets and variables → Actions), OR the sed pattern above no longer matches config.js."
+            cat config.js
+            exit 1
+          fi
+
       - name: Generate version.js
         run: |
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
