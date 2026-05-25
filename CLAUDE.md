@@ -24,6 +24,8 @@ The shared API persists `content` only. We use two lists (via `?list=`) and stor
     steps: [ <string> ] }
   ```
   Quantities are plain decimals (fractions are render-only). Macros are **per serving** (×1); the recipe modal's ×N stepper scales the ingredient + macro *display* only (`macro × N`), never stored values. `qty: null` rows ("to taste") never scale.
+
+  **Recipe authoring convention:** for ingredients measured cooked but bought/cooked raw — rice, pasta, dried beans/lentils, oats, and similar — always add the uncooked/dry equivalent as a `note` on that ingredient (e.g. `{ qty: 1, unit: "cup", item: "cooked rice", note: "≈ ⅓ cup (65 g) uncooked" }`). The listed qty stays the cooked amount; the note carries the raw equivalent so you know how much to start with.
 - `?list=week` — planned slots in the hypothetical week
   ```
   { kind: "slot", library_id, day, meal_type, order, name_snapshot, macros_snapshot }
