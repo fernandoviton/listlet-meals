@@ -394,6 +394,17 @@ dialog::backdrop {
     backdrop-filter: blur(4px);
 }
 
+/* While a modal dialog is open, freeze the page behind it so wheel/touch
+   gestures act on the dialog, not the background ("the back control"). */
+html:has(dialog[open]) { overflow: hidden; }
+
+/* Flex column so the body scrolls internally and the actions stay pinned.
+   Scoped to [open] so the UA `dialog:not([open]) { display: none }` still wins. */
+dialog#recipe-dialog[open] {
+    display: flex;
+    flex-direction: column;
+}
+
 .picker-header {
     padding: 1.1rem 1.4rem 1rem;
     border-bottom: 1px solid var(--line-soft);
@@ -502,6 +513,9 @@ dialog::backdrop {
 
 .dialog-body {
     padding: 1.4rem 1.5rem 0.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;            /* allow the flex child to shrink and scroll */
 }
 .dialog-body h2 {
     font-family: var(--serif);
