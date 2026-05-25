@@ -369,15 +369,25 @@ var WeekView = (function() {
             return;
         }
 
-        var meals = MealsCore.summarizeLibrary(libItems);
-        if (!meals.length) {
-            bodyEl.innerHTML = '<div class="picker-empty">No meals in library yet.</div>';
+        var groups = MealsCore.groupLibraryByType(libItems, currentFilter);
+        if (!groups.length) {
+            var msg = currentFilter !== 'all'
+                ? 'No ' + (MEAL_TYPE_LABELS[currentFilter] || currentFilter) + ' meals in library yet.'
+                : 'No meals in library yet.';
+            bodyEl.innerHTML = '<div class="picker-empty">' + escapeHtml(msg) + '</div>';
             return;
         }
         var html = '';
-        for (var i = 0; i < meals.length; i++) {
-            html += '<button type="button" class="picker-meal" data-id="' + escapeHtml(meals[i].id) + '">' +
-                escapeHtml(meals[i].name || '(unnamed)') + '</button>';
+        for (var g = 0; g < groups.length; g++) {
+            var group = groups[g];
+            html += '<div class="picker-group" data-meal-type="' + group.meal_type + '">';
+            html += '<div class="picker-group-label">' +
+                escapeHtml(MEAL_TYPE_LABELS[group.meal_type] || group.meal_type) + '</div>';
+            for (var i = 0; i < group.meals.length; i++) {
+                html += '<button type="button" class="picker-meal" data-id="' + escapeHtml(group.meals[i].id) + '">' +
+                    escapeHtml(group.meals[i].name || '(unnamed)') + '</button>';
+            }
+            html += '</div>';
         }
         bodyEl.innerHTML = html;
         var btns = bodyEl.querySelectorAll('.picker-meal');

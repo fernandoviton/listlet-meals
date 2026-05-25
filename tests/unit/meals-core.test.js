@@ -302,6 +302,74 @@ describe('meals-core', () => {
         });
     });
 
+    describe('groupLibraryByType', () => {
+        const meal = (id, name, type) =>
+            ({ id, content: JSON.stringify({ kind: 'meal', name, default_meal_type: type }) });
+
+        test('empty input returns empty array', () => {
+            expect(MealsCore.groupLibraryByType([])).toEqual([]);
+        });
+
+        test('groups by meal type in canonical order, omitting empty types', () => {
+            const items = [
+                meal('1', 'Steak', 'dinner'),
+                meal('2', 'Toast', 'breakfast'),
+                meal('3', 'Chips', 'snack')
+            ];
+            const out = MealsCore.groupLibraryByType(items);
+            expect(out.map(g => g.meal_type)).toEqual(['breakfast', 'dinner', 'snack']);
+            expect(out.find(g => g.meal_type === 'breakfast').meals.map(m => m.name)).toEqual(['Toast']);
+        });
+
+        test('within a group, meals stay name-sorted (case-insensitive)', () => {
+            const items = [
+                meal('1', 'banana', 'dinner'),
+                meal('2', 'Apple', 'dinner'),
+                meal('3', 'cherry', 'dinner')
+            ];
+            const out = MealsCore.groupLibraryByType(items);
+            expect(out).toHaveLength(1);
+            expect(out[0].meals.map(m => m.name)).toEqual(['Apple', 'banana', 'cherry']);
+        });
+
+        test('filter restricts to a single type', () => {
+            const items = [
+                meal('1', 'Toast', 'breakfast'),
+                meal('2', 'Steak', 'dinner'),
+                meal('3', 'Salad', 'lunch')
+            ];
+            const out = MealsCore.groupLibraryByType(items, 'dinner');
+            expect(out).toEqual([
+                { meal_type: 'dinner', meals: [{ id: '2', name: 'Steak', default_meal_type: 'dinner' }] }
+            ]);
+        });
+
+        test("filter 'all' and undefined both return all non-empty groups", () => {
+            const items = [meal('1', 'Toast', 'breakfast'), meal('2', 'Steak', 'dinner')];
+            const all = MealsCore.groupLibraryByType(items, 'all');
+            const undef = MealsCore.groupLibraryByType(items);
+            expect(all.map(g => g.meal_type)).toEqual(['breakfast', 'dinner']);
+            expect(undef).toEqual(all);
+        });
+
+        test('filter for a type with no meals returns empty array', () => {
+            const items = [meal('1', 'Toast', 'breakfast')];
+            expect(MealsCore.groupLibraryByType(items, 'snack')).toEqual([]);
+        });
+
+        test('excludes non-meal and unparseable items', () => {
+            const items = [
+                meal('1', 'Toast', 'breakfast'),
+                { id: '2', content: JSON.stringify({ kind: 'slot', name_snapshot: 'X' }) },
+                { id: '3', content: 'not json' }
+            ];
+            const out = MealsCore.groupLibraryByType(items);
+            expect(out).toEqual([
+                { meal_type: 'breakfast', meals: [{ id: '1', name: 'Toast', default_meal_type: 'breakfast' }] }
+            ]);
+        });
+    });
+
     describe('parseContent / serialize', () => {
         test('round-trip a library meal', () => {
             const meal = {

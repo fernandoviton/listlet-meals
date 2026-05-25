@@ -49,6 +49,42 @@ test('week view: clicking add opens a picker listing library meals sorted by nam
     await expect(dialog.locator('.picker-meal')).toHaveText(['Apple Pie', 'banana split', 'cherry tart']);
 });
 
+test('week view: picker groups meals by meal type with section headers', async ({ page }) => {
+    await seed(page, [], [
+        libraryItem('lib-toast', 'Toast', 'r1', 'breakfast'),
+        libraryItem('lib-ziti', 'Ziti', 'r2', 'dinner'),
+        libraryItem('lib-steak', 'Apple Steak', 'r3', 'dinner')
+    ]);
+    await page.goto('/?list=week');
+
+    await page.locator('.day-column[data-day="wed"] .day-add').click();
+    const dialog = page.locator('#picker-dialog');
+    await expect(dialog).toHaveAttribute('open', '');
+
+    // Groups appear in canonical order; empty types (lunch, snack) omitted.
+    await expect(dialog.locator('.picker-group-label')).toHaveText(['Breakfast', 'Dinner']);
+    // Each group lists its meals, name-sorted.
+    await expect(dialog.locator('.picker-group').nth(0).locator('.picker-meal')).toHaveText(['Toast']);
+    await expect(dialog.locator('.picker-group').nth(1).locator('.picker-meal')).toHaveText(['Apple Steak', 'Ziti']);
+});
+
+test('week view: a parent filter restricts the picker to that meal type', async ({ page }) => {
+    await seed(page, [], [
+        libraryItem('lib-toast', 'Toast', 'r1', 'breakfast'),
+        libraryItem('lib-ziti', 'Ziti', 'r2', 'dinner'),
+        libraryItem('lib-salad', 'Salad', 'r3', 'lunch')
+    ]);
+    await page.goto('/?list=week');
+
+    // Set the planner filter to Dinner, then open the picker.
+    await page.locator('.filter-pill[data-filter="dinner"]').click();
+    await page.locator('.day-column[data-day="wed"] .day-add').click();
+
+    const dialog = page.locator('#picker-dialog');
+    await expect(dialog.locator('.picker-group-label')).toHaveText(['Dinner']);
+    await expect(dialog.locator('.picker-meal')).toHaveText(['Ziti']);
+});
+
 test('week view: picking a meal adds a slot to the target day and persists', async ({ page }) => {
     await seed(page, [], [libraryItem('lib-pasta', 'Pasta', 'boil')]);
     await page.goto('/?list=week');

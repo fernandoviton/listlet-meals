@@ -149,6 +149,22 @@ var MealsCore = (function() {
         return out;
     }
 
+    // Group summarized library meals by meal type, in canonical MEAL_TYPES order,
+    // omitting empty types. When `filter` is a specific type, only that group is
+    // considered ('all'/undefined = no restriction). Meals stay name-sorted within
+    // each group (inherited from summarizeLibrary).
+    function groupLibraryByType(items, filter) {
+        var meals = summarizeLibrary(items);
+        var groups = [];
+        for (var i = 0; i < MEAL_TYPES.length; i++) {
+            var mt = MEAL_TYPES[i];
+            if (filter && filter !== 'all' && mt !== filter) continue;
+            var inType = meals.filter(function(m) { return m.default_meal_type === mt; });
+            if (inType.length) groups.push({ meal_type: mt, meals: inType });
+        }
+        return groups;
+    }
+
     function filterSlotsByType(slots, type) {
         if (type === 'all') return slots;
         return slots.filter(function(s) { return s.meal_type === type; });
@@ -287,6 +303,7 @@ var MealsCore = (function() {
         setMealType: setMealType,
         summarizeMacros: summarizeMacros,
         summarizeLibrary: summarizeLibrary,
+        groupLibraryByType: groupLibraryByType,
         filterSlotsByType: filterSlotsByType,
         makeLibraryMeal: makeLibraryMeal,
         updateLibraryMeal: updateLibraryMeal,
