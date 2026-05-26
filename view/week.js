@@ -19,6 +19,10 @@ var WeekView = (function() {
     var api = null;
     var libraryApi = null;
     var libraryCache = null;
+    // { [libraryRowId]: parsedMeal }. Built once per load; slots join live to it.
+    // Initialized to {} (not null) so a realtime Sync-triggered render() that
+    // fires before the library load resolves to fallbacks instead of crashing.
+    var libraryById = {};
     var items = [];
     var currentFilter = 'all';
     var saveTimer = null;
@@ -40,8 +44,14 @@ var WeekView = (function() {
 
     async function loadAndRender() {
         container.innerHTML = '<div class="loading">Loading...</div>';
+        if (!libraryApi) libraryApi = createApi('library');
         try {
-            items = await api.fetchItems();
+            // Fetch the week and the library in parallel; the week renders as a
+            // live join of slots → library by library_id (no stored snapshots).
+            var results = await Promise.all([api.fetchItems(), libraryApi.fetchItems()]);
+            items = results[0];
+            libraryCache = results[1];
+            libraryById = MealsCore.indexLibrary(libraryCache);
             render();
         } catch (err) {
             container.innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message) + '</div>';
@@ -113,7 +123,7 @@ var WeekView = (function() {
             html += '</div>';
 
             html += '<div class="day-summary" data-day="' + day + '">' +
-                renderSummary(MealsCore.summarizeMacros(daySlots)) + '</div>';
+                renderSummary(MealsCore.summarizeMacros(daySlots, libraryById)) + '</div>';
             html += '</div>';
         }
         html += '</div></div>';
@@ -514,7 +524,7 @@ var WeekView = (function() {
         for (var i = 0; i < items.length; i++) {
             if (items[i].id !== id) continue;
             var parsed = MealsCore.parseContent(items[i].content);
-            if (parsed && parsed.macros_snapshot) return parsed.macros_snapshot;
+            if (parsed) return MealsCore.resolveSlot(parsed, libraryById).macros;
         }
         return {};
     }
@@ -570,6 +580,7 @@ var WeekView = (function() {
     }
 
     function renderSlotCard(slot) {
+        var resolved = MealsCore.resolveSlot(slot, libraryById);
         return '<div class="slot-card"' +
             ' data-id="' + escapeHtml(slot.id) + '"' +
             ' data-library-id="' + escapeHtml(slot.library_id || '') + '"' +
@@ -577,8 +588,8 @@ var WeekView = (function() {
             ' role="button" tabindex="0"' +
             '>' +
             '<div class="slot-text">' +
-                '<span class="slot-name">' + escapeHtml(slot.name_snapshot || '(unnamed)') + '</span>' +
-                '<span class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(slot.macros_snapshot)) + '</span>' +
+                '<span class="slot-name">' + escapeHtml(resolved.name || '(unnamed)') + '</span>' +
+                '<span class="slot-macros">' + escapeHtml(ViewUtils.formatMacros(resolved.macros)) + '</span>' +
             '</div>' +
             '<button type="button" class="slot-grab" aria-label="Drag to reorder" tabindex="-1">' +
                 '<span></span><span></span><span></span>' +

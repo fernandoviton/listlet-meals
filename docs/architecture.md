@@ -75,11 +75,11 @@ Quantities are plain decimals (fractions are a render concern). Macros are **per
 
 **Week item content** (`?list=week`):
 ```js
-{ kind: "slot", library_id, day, meal_type, order, name_snapshot, macros_snapshot }
+{ kind: "slot", library_id, day, meal_type, order }
 ```
 
 Notes:
-- `name_snapshot` / `macros_snapshot` let the week view render without joining the library and survive library deletions. The recipe is **not** snapshotted — expanding a slot fetches the live library row.
+- A slot stores **no name/macros/recipe snapshot**. The week page fetches both lists on boot and renders as a **live join**: it builds a `{ [libraryRowId]: parsedMeal }` map (`MealsCore.indexLibrary`) and resolves each slot's name + macros from its library row by `library_id` (`MealsCore.resolveSlot`); expanding a slot fetches the same row's recipe. A library edit (e.g. via the CLI) therefore shows up on the next week reload without remove/re-add. A slot whose library meal was **deleted** has no match, so it renders a `(deleted meal)` fallback and contributes 0 to day totals — the accepted tradeoff for live correctness in a hypothetical planner.
 - `day` is one of `["sat","sun","mon","tue","wed","thu","fri"]`.
 - `meal_type` is one of `["breakfast","lunch","dinner","snack"]`.
 - Any macro field may be missing or `null`. `summarizeMacros` only emits keys that appeared at least once.
@@ -92,11 +92,14 @@ Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test
 - `parseContent(jsonString)` → object | `null`
 - `serialize(obj)` → string
 - `nextOrder(slots, day, mealType)` → number
-- `addSlot(weekItems, libraryMeal, day)` → `{ newSlotContent }` — meal_type comes from the library meal's `default_meal_type`
+- `addSlot(weekItems, libraryMeal, day)` → `{ newSlotContent }` — meal_type comes from the library meal's `default_meal_type`; emits the snapshot-free slot shape
 - `moveSlot(slots, id, toDay, toMealType, toIndex)` → new slot array with recompacted `order` within source and target (day, meal_type) sections
 - `removeSlot(slots, id)` → new slot array with recompacted `order` within the source (day, meal_type)
 - `setMealType(slots, id, mealType)` → new slot array
-- `summarizeMacros(slots)` → totals object (only keys that appeared)
+- `indexLibrary(libraryItems)` → `{ [rowId]: parsedMeal }` map (skips non-meal / unparseable rows; null input → `{}`). Built once per week load to drive the live join.
+- `resolveSlot(slot, libraryById)` → `{ name, macros, found }` — joins a slot to its live library meal; when absent (deleted), returns `{ name: '(deleted meal)', macros: {}, found: false }`. Tolerates a null map (resolves to the fallback, never throws).
+- `summarizeMacros(slots, libraryById)` → totals object (only keys that appeared), summing the **live** library macros for each slot; slots with no matching library row contribute nothing. Tolerates a null map.
+- `cleanSlot(slot)` → a slot stripped of the legacy `name_snapshot`/`macros_snapshot` fields (idempotent, non-mutating). Used by the `migrate-week` CLI to rewrite existing rows.
 - `summarizeLibrary(items)` → `[{ id, name, default_meal_type }]` sorted by name
 - `groupLibraryByType(items, filter)` → `[{ meal_type, meals }]` in canonical meal-type order, empty types omitted; `filter` (a meal type) restricts to one group (`'all'`/undefined = no restriction). Drives the picker's grouped/filtered render.
 - `filterSlotsByType(slots, type)` — `'all'` passes through
@@ -130,7 +133,7 @@ Each `*View.init(container, api)` module:
 
 `LibraryView` additionally calls back to `App.ensureMockSeed()` during render so a freshly opened mock-mode library page populates itself.
 
-`WeekView` additionally maintains a `libraryApi` + `libraryCache` for slot recipe lookups (`getLibraryMeal`) and picker population — only the week view needs to read individual library rows.
+`WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing.
 
 ### Day column layout
 
@@ -138,7 +141,7 @@ Each day column renders four meal-type sections (`breakfast`, `lunch`, `dinner`,
 
 ### Slot card interactions
 
-The slot card has two affordances: the card body opens the recipe modal on `click`, and a small iOS-style `.slot-grab` handle on the right starts a drag on `pointerdown`. The modal contains the meal name, the (per-serving) macro line, a `− ×N +` scale stepper, the recipe (rendered via `ViewUtils.renderRecipeHtml`), and a destructive **Delete** action. The recipe is fetched async after the modal opens; the stepper is enabled only once the fetch resolves and its change handler closes over the resolved recipe + the slot's raw `macros_snapshot` (`dialog.dataset.factor` holds only the integer N), re-rendering ingredients via `renderRecipeHtml(recipe, N)` and the macro line via `formatMacros(macros × N)`. Drag changes both day and meal_type by dropping into a target `.meal-section`.
+The slot card has two affordances: the card body opens the recipe modal on `click`, and a small iOS-style `.slot-grab` handle on the right starts a drag on `pointerdown`. The card's name + macro line are resolved live via `MealsCore.resolveSlot(slot, libraryById)`. The modal contains the meal name, the (per-serving) macro line, a `− ×N +` scale stepper, the recipe (rendered via `ViewUtils.renderRecipeHtml`), and a destructive **Delete** action. The recipe is fetched async after the modal opens; the stepper is enabled only once the fetch resolves and its change handler closes over the resolved recipe + the slot's live macros (resolved from the library by `library_id`; `dialog.dataset.factor` holds only the integer N), re-rendering ingredients via `renderRecipeHtml(recipe, N)` and the macro line via `formatMacros(macros × N)`. Drag changes both day and meal_type by dropping into a target `.meal-section`.
 
 ### Drag-and-drop
 
@@ -166,7 +169,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 
 Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
 
-- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Reads/writes the `listlet_meals` table where `list_name = 'library'`.
+- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). A `migrate-week` subcommand (`--list <name>`, `--dry-run`) is a one-time, idempotent cleanup that rewrites week slot rows to the snapshot-free live-join shape via `MealsCore.cleanSlot`. Reads/writes the `listlet_meals` table (`list_name = 'library'`, or `migrate-week`'s `--list`).
 - `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
 - `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
 

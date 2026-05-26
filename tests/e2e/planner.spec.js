@@ -1,5 +1,8 @@
 const { test, expect } = require('./fixtures');
 
+// `name` / `opts.macros` are no longer stored on the slot (the week joins live
+// to the library); they stay in the signature to document which library row each
+// call expects to be seeded alongside it.
 function slotItem(id, day, order, name, opts) {
     opts = opts || {};
     const now = new Date().toISOString();
@@ -11,9 +14,7 @@ function slotItem(id, day, order, name, opts) {
             library_id: opts.library_id || 'lib-' + id,
             day: day,
             meal_type: opts.meal_type || 'lunch',
-            order: order,
-            name_snapshot: name,
-            macros_snapshot: opts.macros || {}
+            order: order
         }),
         created_at: now,
         updated_at: now
@@ -51,7 +52,10 @@ test('week view renders Sat→Fri columns with seeded slots', async ({ page }) =
     await seed(page, [
         slotItem('s1', 'mon', 0, 'Pasta', { meal_type: 'dinner', library_id: 'lib-pasta' }),
         slotItem('s2', 'wed', 0, 'Salad', { meal_type: 'lunch', library_id: 'lib-salad' })
-    ], []);
+    ], [
+        libraryItem('lib-pasta', 'Pasta', 'boil', { meal_type: 'dinner' }),
+        libraryItem('lib-salad', 'Salad', 'toss', { meal_type: 'lunch' })
+    ]);
     await page.goto('/?list=week');
 
     const headers = page.locator('.day-header .day-label');
@@ -64,7 +68,9 @@ test('week view renders Sat→Fri columns with seeded slots', async ({ page }) =
 test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page }) => {
     await seed(page, [
         slotItem('s1', 'mon', 0, 'Pasta', { library_id: 'lib-pasta' })
-    ], []);
+    ], [
+        libraryItem('lib-pasta', 'Pasta', 'boil')
+    ]);
     await page.goto('/?list=week');
 
     const source = page.locator('.day-column[data-day="mon"] .slot-card .slot-grab');

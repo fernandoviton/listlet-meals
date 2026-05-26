@@ -29,34 +29,110 @@ describe('meals-core', () => {
 
     describe('summarizeMacros', () => {
         test('empty list returns empty object', () => {
-            expect(MealsCore.summarizeMacros([])).toEqual({});
+            expect(MealsCore.summarizeMacros([], {})).toEqual({});
         });
 
-        test('sums all four macros when all present', () => {
-            const slots = [
-                { macros_snapshot: { cal: 100, protein: 10, carbs: 20, fat: 5 } },
-                { macros_snapshot: { cal: 200, protein: 15, carbs: 30, fat: 8 } }
-            ];
-            expect(MealsCore.summarizeMacros(slots)).toEqual({
+        test('sums all four macros from the live library', () => {
+            const slots = [{ library_id: 'a' }, { library_id: 'b' }];
+            const libraryById = {
+                a: { macros: { cal: 100, protein: 10, carbs: 20, fat: 5 } },
+                b: { macros: { cal: 200, protein: 15, carbs: 30, fat: 8 } }
+            };
+            expect(MealsCore.summarizeMacros(slots, libraryById)).toEqual({
                 cal: 300, protein: 25, carbs: 50, fat: 13
             });
         });
 
         test('omits keys that are null in all contributing slots', () => {
-            const slots = [
-                { macros_snapshot: { cal: 100, protein: null, carbs: 20, fat: null } },
-                { macros_snapshot: { cal: 200, protein: null, carbs: 30, fat: null } }
-            ];
-            expect(MealsCore.summarizeMacros(slots)).toEqual({ cal: 300, carbs: 50 });
+            const slots = [{ library_id: 'a' }, { library_id: 'b' }];
+            const libraryById = {
+                a: { macros: { cal: 100, protein: null, carbs: 20, fat: null } },
+                b: { macros: { cal: 200, protein: null, carbs: 30, fat: null } }
+            };
+            expect(MealsCore.summarizeMacros(slots, libraryById)).toEqual({ cal: 300, carbs: 50 });
         });
 
-        test('ignores missing keys / missing macros_snapshot', () => {
-            const slots = [
-                { macros_snapshot: { cal: 100 } },
-                {},
-                { macros_snapshot: null }
+        test('a slot whose library_id is missing from the map contributes nothing', () => {
+            const slots = [{ library_id: 'a' }, { library_id: 'gone' }];
+            const libraryById = { a: { macros: { cal: 100 } } };
+            expect(MealsCore.summarizeMacros(slots, libraryById)).toEqual({ cal: 100 });
+        });
+
+        test('treats a null / missing libraryById as empty (no throw)', () => {
+            expect(MealsCore.summarizeMacros([{ library_id: 'a' }], null)).toEqual({});
+            expect(MealsCore.summarizeMacros([{ library_id: 'a' }])).toEqual({});
+        });
+    });
+
+    describe('indexLibrary', () => {
+        test('maps row id → parsed meal', () => {
+            const items = [
+                { id: 'a', content: JSON.stringify({ kind: 'meal', name: 'Pasta', macros: { cal: 500 } }) },
+                { id: 'b', content: JSON.stringify({ kind: 'meal', name: 'Salad', macros: { cal: 200 } }) }
             ];
-            expect(MealsCore.summarizeMacros(slots)).toEqual({ cal: 100 });
+            const map = MealsCore.indexLibrary(items);
+            expect(map.a.name).toBe('Pasta');
+            expect(map.b.macros).toEqual({ cal: 200 });
+        });
+
+        test('skips non-meal and unparseable rows', () => {
+            const items = [
+                { id: 'a', content: JSON.stringify({ kind: 'meal', name: 'Pasta' }) },
+                { id: 'b', content: JSON.stringify({ kind: 'slot' }) },
+                { id: 'c', content: 'not json' }
+            ];
+            expect(Object.keys(MealsCore.indexLibrary(items))).toEqual(['a']);
+        });
+
+        test('treats a null / missing input as empty (no throw)', () => {
+            expect(MealsCore.indexLibrary(null)).toEqual({});
+            expect(MealsCore.indexLibrary()).toEqual({});
+        });
+    });
+
+    describe('resolveSlot', () => {
+        test('returns live name/macros and found:true when the library meal exists', () => {
+            const libraryById = { a: { name: 'Pasta', macros: { cal: 500 } } };
+            expect(MealsCore.resolveSlot({ library_id: 'a' }, libraryById)).toEqual({
+                name: 'Pasta', macros: { cal: 500 }, found: true
+            });
+        });
+
+        test('returns the (deleted meal) fallback with found:false when not found', () => {
+            expect(MealsCore.resolveSlot({ library_id: 'gone' }, {})).toEqual({
+                name: '(deleted meal)', macros: {}, found: false
+            });
+        });
+
+        test('treats a null / missing libraryById as empty (no throw)', () => {
+            expect(MealsCore.resolveSlot({ library_id: 'a' }, null).found).toBe(false);
+            expect(MealsCore.resolveSlot({ library_id: 'a' }).found).toBe(false);
+        });
+    });
+
+    describe('cleanSlot', () => {
+        test('strips name_snapshot / macros_snapshot and leaves the rest intact', () => {
+            const slot = {
+                kind: 'slot', library_id: 'lib-1', day: 'mon', meal_type: 'lunch', order: 0,
+                name_snapshot: 'Salad', macros_snapshot: { cal: 400 }
+            };
+            expect(MealsCore.cleanSlot(slot)).toEqual({
+                kind: 'slot', library_id: 'lib-1', day: 'mon', meal_type: 'lunch', order: 0
+            });
+        });
+
+        test('is a no-op on an already-clean slot (idempotent)', () => {
+            const slot = { kind: 'slot', library_id: 'lib-1', day: 'mon', meal_type: 'lunch', order: 0 };
+            expect(MealsCore.cleanSlot(slot)).toEqual(slot);
+        });
+
+        test('does not mutate the input', () => {
+            const slot = {
+                kind: 'slot', library_id: 'x', day: 'mon', meal_type: 'lunch', order: 0, name_snapshot: 'Y'
+            };
+            const copy = JSON.parse(JSON.stringify(slot));
+            MealsCore.cleanSlot(slot);
+            expect(slot).toEqual(copy);
         });
     });
 
@@ -162,8 +238,9 @@ describe('meals-core', () => {
             expect(parsed.day).toBe('wed');
             expect(parsed.meal_type).toBe('breakfast');
             expect(parsed.order).toBe(0);
-            expect(parsed.name_snapshot).toBe('Oatmeal');
-            expect(parsed.macros_snapshot).toEqual({ cal: 300, protein: 10, carbs: 50, fat: 5 });
+            // Snapshots are gone — the week now joins live to the library by library_id.
+            expect(parsed.name_snapshot).toBeUndefined();
+            expect(parsed.macros_snapshot).toBeUndefined();
         });
 
         test('order continues from existing same-(day, meal_type) slots only', () => {
@@ -390,9 +467,7 @@ describe('meals-core', () => {
                 library_id: 'lib-1',
                 day: 'mon',
                 meal_type: 'lunch',
-                order: 0,
-                name_snapshot: 'Salad',
-                macros_snapshot: { cal: 400, protein: null, carbs: null, fat: null }
+                order: 0
             };
             expect(MealsCore.parseContent(MealsCore.serialize(slot))).toEqual(slot);
         });

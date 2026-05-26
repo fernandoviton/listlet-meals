@@ -39,9 +39,7 @@ var MealsCore = (function() {
             library_id: libraryMeal.id,
             day: day,
             meal_type: mealType,
-            order: nextOrder(existingSlots, day, mealType),
-            name_snapshot: meal.name || '',
-            macros_snapshot: meal.macros || {}
+            order: nextOrder(existingSlots, day, mealType)
         };
         return { newSlotContent: serialize(slot) };
     }
@@ -105,12 +103,40 @@ var MealsCore = (function() {
         });
     }
 
-    function summarizeMacros(slots) {
+    // Build an { [rowId]: parsedMeal } map from raw library items. Non-meal /
+    // unparseable rows are skipped. A null/undefined input yields an empty map.
+    function indexLibrary(libraryItems) {
+        var map = {};
+        if (!libraryItems) return map;
+        for (var i = 0; i < libraryItems.length; i++) {
+            var parsed = parseContent(libraryItems[i].content);
+            if (parsed && parsed.kind === 'meal') map[libraryItems[i].id] = parsed;
+        }
+        return map;
+    }
+
+    // Join a week slot to its live library meal by library_id. When found,
+    // returns the live name/macros; when not (e.g. the meal was deleted), a
+    // fallback label and empty macros. A null/undefined map resolves to the
+    // fallback rather than throwing (a realtime Sync render can fire before the
+    // library map is built).
+    function resolveSlot(slot, libraryById) {
+        var map = libraryById || {};
+        var meal = slot ? map[slot.library_id] : null;
+        if (meal) {
+            return { name: meal.name || '', macros: meal.macros || {}, found: true };
+        }
+        return { name: '(deleted meal)', macros: {}, found: false };
+    }
+
+    function summarizeMacros(slots, libraryById) {
+        var map = libraryById || {};
         var keys = ['cal', 'protein', 'carbs', 'fat'];
         var totals = { cal: 0, protein: 0, carbs: 0, fat: 0 };
         var seen = { cal: false, protein: false, carbs: false, fat: false };
         for (var i = 0; i < slots.length; i++) {
-            var m = slots[i] && slots[i].macros_snapshot;
+            var meal = slots[i] ? map[slots[i].library_id] : null;
+            var m = meal && meal.macros;
             if (!m) continue;
             for (var j = 0; j < keys.length; j++) {
                 var k = keys[j];
@@ -126,6 +152,18 @@ var MealsCore = (function() {
             if (seen[keys[k2]]) out[keys[k2]] = totals[keys[k2]];
         }
         return out;
+    }
+
+    // Strip the legacy snapshot fields from a parsed slot, keeping only the
+    // live-join shape. Pure; safe to call on already-clean slots (idempotent).
+    function cleanSlot(slot) {
+        return {
+            kind: 'slot',
+            library_id: slot.library_id,
+            day: slot.day,
+            meal_type: slot.meal_type,
+            order: slot.order
+        };
     }
 
     function summarizeLibrary(items) {
@@ -302,6 +340,9 @@ var MealsCore = (function() {
         removeSlot: removeSlot,
         setMealType: setMealType,
         summarizeMacros: summarizeMacros,
+        indexLibrary: indexLibrary,
+        resolveSlot: resolveSlot,
+        cleanSlot: cleanSlot,
         summarizeLibrary: summarizeLibrary,
         groupLibraryByType: groupLibraryByType,
         filterSlotsByType: filterSlotsByType,

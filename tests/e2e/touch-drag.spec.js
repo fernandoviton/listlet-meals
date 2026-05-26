@@ -14,9 +14,26 @@ function slotItem(id, day, order, name) {
             library_id: 'lib-' + id,
             day: day,
             meal_type: 'lunch',
-            order: order,
-            name_snapshot: name,
-            macros_snapshot: {}
+            order: order
+        }),
+        created_at: now,
+        updated_at: now
+    };
+}
+
+// The week joins live to the library by library_id; seed a matching library row
+// (id 'lib-' + slotId) so each slot resolves its name instead of falling back.
+function libraryItem(id, name) {
+    const now = new Date().toISOString();
+    return {
+        id: id,
+        list_name: 'library',
+        content: JSON.stringify({
+            kind: 'meal',
+            name: name,
+            recipe: { ingredients: [], steps: [] },
+            default_meal_type: 'lunch',
+            macros: {}
         }),
         created_at: now,
         updated_at: now
@@ -35,12 +52,13 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-async function seed(page, week) {
+async function seed(page, week, library) {
     await page.goto('/');
-    await page.evaluate((week) => {
+    await page.evaluate(({ week, library }) => {
         localStorage.clear();
         localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
-    }, week);
+        localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
+    }, { week, library });
 }
 
 // Dispatch a synthetic touch-typed pointer-event sequence: pointerdown on
@@ -95,7 +113,7 @@ async function touchDrag(page, fromSelector, toSelector, opts) {
 }
 
 test('touch-drag from the grab handle moves a slot from Mon to Wed and persists', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')]);
+    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
     await page.goto('/?list=week');
 
     await touchDrag(page,
@@ -111,7 +129,7 @@ test('touch-drag from the grab handle moves a slot from Mon to Wed and persists'
 });
 
 test('tapping the card body (not the handle) opens the recipe modal and does NOT move the slot', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')]);
+    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
     await page.goto('/?list=week');
 
     // Tap the slot-name (card body), not the grab handle — should open the

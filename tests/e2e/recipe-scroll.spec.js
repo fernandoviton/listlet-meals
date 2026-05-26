@@ -16,9 +16,26 @@ function slotItem(id, day, order, name) {
             library_id: 'lib-' + id,
             day: day,
             meal_type: 'lunch',
-            order: order,
-            name_snapshot: name,
-            macros_snapshot: {}
+            order: order
+        }),
+        created_at: now,
+        updated_at: now
+    };
+}
+
+// The week joins live to the library by library_id; seed a matching library row
+// (id 'lib-' + slotId) so each slot resolves its name instead of falling back.
+function libraryItem(id, name) {
+    const now = new Date().toISOString();
+    return {
+        id: id,
+        list_name: 'library',
+        content: JSON.stringify({
+            kind: 'meal',
+            name: name,
+            recipe: { ingredients: [], steps: [] },
+            default_meal_type: 'lunch',
+            macros: {}
         }),
         created_at: now,
         updated_at: now
@@ -37,12 +54,13 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-async function seed(page, week) {
+async function seed(page, week, library) {
     await page.goto('/');
-    await page.evaluate((week) => {
+    await page.evaluate(({ week, library }) => {
         localStorage.clear();
         localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
-    }, week);
+        localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
+    }, { week, library });
 }
 
 // A handful of slots across days + a short viewport so the document overflows
@@ -55,9 +73,17 @@ const WEEK = [
     slotItem('s5', 'fri', 0, 'Curry')
 ];
 
+const LIBRARY = [
+    libraryItem('lib-s1', 'Pasta'),
+    libraryItem('lib-s2', 'Soup'),
+    libraryItem('lib-s3', 'Salad'),
+    libraryItem('lib-s4', 'Wrap'),
+    libraryItem('lib-s5', 'Curry')
+];
+
 test('wheel over the open recipe modal does not scroll the page behind it', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
-    await seed(page, WEEK);
+    await seed(page, WEEK, LIBRARY);
     await page.goto('/?list=week');
 
     // Sanity: the document is actually scrollable.
@@ -83,7 +109,7 @@ test('wheel over the open recipe modal does not scroll the page behind it', asyn
 
 test('the root is scroll-locked and the dialog body scrolls while the modal is open', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
-    await seed(page, WEEK);
+    await seed(page, WEEK, LIBRARY);
     await page.goto('/?list=week');
 
     await page.locator('.day-column[data-day="mon"] .slot-card .slot-name').click();

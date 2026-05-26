@@ -102,3 +102,81 @@ test('week view: picking a meal adds a slot to the target day and persists', asy
     await expect(page.locator('.day-column[data-day="thu"] .slot-name')).toHaveText('Pasta');
 });
 
+function libraryMealRow(id, name, macros) {
+    const now = new Date().toISOString();
+    return {
+        id: id,
+        list_name: 'library',
+        content: JSON.stringify({
+            kind: 'meal',
+            name: name,
+            recipe: { ingredients: [], steps: [] },
+            default_meal_type: 'dinner',
+            macros: macros || {}
+        }),
+        created_at: now,
+        updated_at: now
+    };
+}
+
+function slotRow(id, libraryId) {
+    const now = new Date().toISOString();
+    return {
+        id: id,
+        list_name: 'week',
+        content: JSON.stringify({
+            kind: 'slot',
+            library_id: libraryId,
+            day: 'mon',
+            meal_type: 'dinner',
+            order: 0
+        }),
+        created_at: now,
+        updated_at: now
+    };
+}
+
+test('week view: slot card + day summary render live library macros and follow a library edit', async ({ page }) => {
+    await seed(page,
+        [slotRow('s1', 'lib-p')],
+        [libraryMealRow('lib-p', 'Pasta', { cal: 500, protein: 20 })]
+    );
+    await page.goto('/?list=week');
+
+    const mon = page.locator('.day-column[data-day="mon"]');
+    await expect(mon.locator('.slot-name')).toHaveText('Pasta');
+    await expect(mon.locator('.slot-macros')).toHaveText('500 cal • 20g P');
+    await expect(mon.locator('.day-summary')).toHaveText('500 cal • 20g P');
+
+    // Edit the library meal's macros directly (mirrors a CLI edit), then reload.
+    await page.evaluate(() => {
+        const lib = JSON.parse(localStorage.getItem('listlet_listlet_meals_library'));
+        const row = lib.find(r => r.id === 'lib-p');
+        row.content = JSON.stringify({
+            kind: 'meal', name: 'Pasta',
+            recipe: { ingredients: [], steps: [] },
+            default_meal_type: 'dinner', macros: { cal: 800, protein: 35 }
+        });
+        localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(lib));
+    });
+    await page.goto('/?list=week');
+
+    // Live join → the card and the summary show the NEW macros, no remove/re-add.
+    await expect(mon.locator('.slot-macros')).toHaveText('800 cal • 35g P');
+    await expect(mon.locator('.day-summary')).toHaveText('800 cal • 35g P');
+});
+
+test('week view: a slot whose library meal is gone renders the (deleted meal) fallback and totals 0', async ({ page }) => {
+    // Seed a NON-EMPTY library (without lib-gone) so the auto-seed does not
+    // repopulate demo meals; the slot's library_id has no match → fallback.
+    await seed(page,
+        [slotRow('s1', 'lib-gone')],
+        [libraryMealRow('lib-other', 'Other', { cal: 100 })]
+    );
+    await page.goto('/?list=week');
+
+    const mon = page.locator('.day-column[data-day="mon"]');
+    await expect(mon.locator('.slot-name')).toHaveText('(deleted meal)');
+    await expect(mon.locator('.day-summary')).toHaveText('');
+});
+
