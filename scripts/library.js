@@ -8,6 +8,7 @@
 //   node scripts/library.js update --name "Oatmeal" --file oatmeal.json
 //   node scripts/library.js delete --name "Oatmeal"
 //   node scripts/library.js delete --id <uuid>
+//   node scripts/library.js trends --from 2026-06-01 --to 2026-06-28 --format csv
 //
 // A --file is a whole-meal JSON document: { name, type, macros, recipe } where
 // `recipe` is the structured { ingredients:[...], steps:[...] } object and `type`
@@ -36,6 +37,7 @@ Commands:
                               --id; with --id, --name renames the meal.
   delete --name <n>         Delete a meal by name (errors if the name is ambiguous)
   delete --id <uuid>        Delete a meal by row id
+  trends [opts]             Export per-day macro totals over a date range
 
 add options:
   --file <path.json>        whole-meal JSON ({ name, type, macros, recipe }); the
@@ -51,7 +53,12 @@ update options:
                               flag (a full recipe means it's a real meal now).
   --adhoc <true|false>      set or clear the adhoc flag explicitly (overrides the
                               --file auto-clear)
-  same scalar fields as add; only what you pass changes. Pass a macro as "" to clear it.`;
+  same scalar fields as add; only what you pass changes. Pass a macro as "" to clear it.
+
+trends options:
+  --from <iso> --to <iso>   date range (default: to = today, from = to − 27 days)
+  --format csv|json         output format (default csv)
+  --list <name>             week list_name to read (default "week")`;
 
 function parseArgs(argv) {
     const args = {};
@@ -102,14 +109,21 @@ function readMealFile(path) {
     return out;
 }
 
-async function fetchLibrary() {
+// Raw { id, content } rows for a list. NOTE: like the browser, this single
+// query is capped at ~1000 rows by Supabase (ascending by created_at), so a
+// very long history would silently drop its oldest rows — see docs/architecture.md.
+async function fetchRows(listName) {
     const { data, error } = await supabase
         .from(DB_TABLE)
         .select('id, content')
-        .eq('list_name', LIST)
+        .eq('list_name', listName)
         .order('created_at');
     if (error) throw error;
-    return (data || []).map((row) => ({ id: row.id, meal: MealsCore.parseContent(row.content) }));
+    return data || [];
+}
+
+async function fetchLibrary() {
+    return (await fetchRows(LIST)).map((row) => ({ id: row.id, meal: MealsCore.parseContent(row.content) }));
 }
 
 // parseArgs yields boolean true for a bare --adhoc and the string 'true'/'false'
@@ -250,6 +264,40 @@ async function cmdDelete(args) {
     console.log(`Deleted ${id}`);
 }
 
+// Export per-day macro totals over [from, to]. Reads the dated week list +
+// library, joins them live (summarizeMacrosByDate), and prints one row per day
+// in the inclusive range — empty days included (proves the pipeline even with
+// no data). CSV header: date,cal,protein,carbs,fat; JSON: { from, to, days }.
+async function cmdTrends(args) {
+    const weekList = typeof args.list === 'string' ? args.list : 'week';
+    const to = typeof args.to === 'string' ? args.to : ViewUtils.localIsoDate(new Date());
+    const from = typeof args.from === 'string' ? args.from : MealsCore.addDays(to, -27);
+    const format = args.format === 'json' ? 'json' : 'csv';
+
+    if (!MealsCore.isIsoDate(from) || !MealsCore.isIsoDate(to)) {
+        throw new Error('--from / --to must be valid YYYY-MM-DD dates');
+    }
+
+    const libraryById = MealsCore.indexLibrary(await fetchRows(LIST));
+    const slots = (await fetchRows(weekList))
+        .map((r) => MealsCore.parseContent(r.content))
+        .filter((p) => p && p.kind === 'slot' && MealsCore.isIsoDate(p.date));
+    const byDate = MealsCore.summarizeMacrosByDate(slots, libraryById);
+    const dates = MealsCore.dateRange(from, to);
+    const KEYS = ['cal', 'protein', 'carbs', 'fat'];
+
+    if (format === 'json') {
+        const days = dates.map((d) => Object.assign({ date: d }, byDate[d] || {}));
+        console.log(JSON.stringify({ from, to, days }, null, 2));
+        return;
+    }
+    console.log('date,' + KEYS.join(','));
+    for (const d of dates) {
+        const m = byDate[d] || {};
+        console.log([d].concat(KEYS.map((k) => (typeof m[k] === 'number' ? m[k] : ''))).join(','));
+    }
+}
+
 async function main() {
     const { args, positional } = parseArgs(process.argv.slice(2));
     const command = positional[0];
@@ -258,7 +306,7 @@ async function main() {
         console.log(USAGE);
         return;
     }
-    if (!['list', 'add', 'update', 'delete'].includes(command)) {
+    if (!['list', 'add', 'update', 'delete', 'trends'].includes(command)) {
         console.error(`Unknown command: ${command}\n`);
         console.log(USAGE);
         process.exitCode = 1;
@@ -272,6 +320,7 @@ async function main() {
     else if (command === 'add') await cmdAdd(args);
     else if (command === 'update') await cmdUpdate(args);
     else if (command === 'delete') await cmdDelete(args);
+    else if (command === 'trends') await cmdTrends(args);
 }
 
 main().catch((err) => {
