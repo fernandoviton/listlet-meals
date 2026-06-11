@@ -93,10 +93,37 @@ var ViewUtils = (function() {
         return html;
     }
 
+    // Weekday label, computed locally so view/utils.js stays standalone-
+    // requirable (no MealsDates dependency). DOW is sat-first to match the
+    // planner's week; index = (getUTCDay()+1)%7.
+    var DOW_LABELS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+    // 'YYYY-MM-DD' → 'Sat 6/13' (weekday + M/D, no leading zeros).
+    function formatDayLabel(iso) {
+        var y = Number(iso.slice(0, 4));
+        var m = Number(iso.slice(5, 7));
+        var d = Number(iso.slice(8, 10));
+        var dt = new Date(Date.UTC(y, m - 1, d));
+        var label = DOW_LABELS[(dt.getUTCDay() + 1) % 7];
+        return label + ' ' + m + '/' + d;
+    }
+
+    // A Date → 'YYYY-MM-DD' from its *local* components, so "today" is the
+    // wall-clock day (never a UTC shift across midnight). Takes the Date as an
+    // argument for testability.
+    function localIsoDate(dateObj) {
+        var y = dateObj.getFullYear();
+        var m = dateObj.getMonth() + 1;
+        var d = dateObj.getDate();
+        return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+    }
+
     return {
         formatMacros: formatMacros,
         formatQuantity: formatQuantity,
-        renderRecipeHtml: renderRecipeHtml
+        renderRecipeHtml: renderRecipeHtml,
+        formatDayLabel: formatDayLabel,
+        localIsoDate: localIsoDate
     };
 })();
 

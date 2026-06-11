@@ -18,6 +18,13 @@ var MealsCore = (function() {
         // content
         parseContent: Content.parseContent,
         serialize: Content.serialize,
+        // dates
+        isIsoDate: Dates.isIsoDate,
+        addDays: Dates.addDays,
+        dayOfWeek: Dates.dayOfWeek,
+        weekStart: Dates.weekStart,
+        weekDates: Dates.weekDates,
+        dateRange: Dates.dateRange,
         // slots
         nextOrder: Slots.nextOrder,
         addSlot: Slots.addSlot,
