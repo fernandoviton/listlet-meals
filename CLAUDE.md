@@ -16,8 +16,9 @@ The shared API persists `content` only. We use two lists (via `?list=`) and stor
 
 - `?list=library` — meal definitions
   ```
-  { kind: "meal", name, recipe, default_meal_type, macros: { cal?, protein?, carbs?, fat? } }
+  { kind: "meal", name, recipe, default_meal_type, macros: { cal?, protein?, carbs?, fat? }, adhoc?: true }
   ```
+  `adhoc: true` marks a meal created via the planner's **Quick add** (name + optional macros, empty recipe). The key is present **only when true** — real/promoted meals omit it. Ad-hoc meals are hidden from the picker list and the library page, but still live-join into placed slots (name, macros, day totals). Promote via the CLI (see the extraction workflow below); promotion keeps the row id so placed slots are unaffected.
   `recipe` is a **structured object**, not a string:
   ```
   { ingredients: [ { qty: <number|null>, unit: <string|null>, item: <string>, note?: <string> } ],
@@ -58,10 +59,11 @@ Days: `["sat","sun","mon","tue","wed","thu","fri"]`. Any macro field may be `nul
 
 ## Library CLI
 
-There is **no browser UI for adding/editing/deleting library meals yet** — use the CLI at `scripts/library.js`:
+There is **no browser UI for editing/deleting library meals yet** — the only browser entry point is the planner's Quick add, which creates `adhoc: true` rows. Everything else goes through the CLI at `scripts/library.js`:
 
 ```
 node scripts/library.js list
+node scripts/library.js list --adhoc                # only quick-added meals awaiting a recipe
 node scripts/library.js add --file oatmeal.json
 node scripts/library.js add --name "Oatmeal" --type breakfast --cal 320   # quick, no recipe
 node scripts/library.js update --name "Oatmeal" --file oatmeal.json       # replace recipe + fields
@@ -74,6 +76,7 @@ node scripts/library.js migrate-week --list <name>        # rewrite week slot ro
 
 - **`--file <path.json>` is how you add/update a recipe** — a whole-meal JSON document `{ name, type, macros, recipe }` where `recipe` is the structured `{ ingredients, steps }` object (see the data model above). The file's CLI-friendly `type` is mapped to `default_meal_type` before calling core. Scalar flags (`--name`/`--type`/`--cal`/…) override the file's fields, so `--file` + a flag is fine for tweaks. There is no `--recipe` flag.
 - `--type` is one of `breakfast|lunch|dinner|snack` (default `dinner`); all macros are optional. `add` builds `content` via `MealsCore.makeLibraryMeal`.
+- **Ad-hoc extraction workflow (Claude Code):** `list --adhoc` shows quick-added meals (tagged `[adhoc]` in plain `list`). To turn one into a reusable recipe, draft a whole-meal JSON (per the data model + recipe authoring convention above) and run `update --id <uuid> --file meal.json`. Passing `--file` on `update` **auto-clears the adhoc flag** (a full recipe means it's a real meal now); `--adhoc true|false` overrides explicitly. An ad-hoc meal that should become pickable without a recipe can be promoted via `update --id <uuid> --adhoc false`.
 - **To edit a meal use `update`, never delete+re-add.** `update` rewrites the row's `content` (via `MealsCore.updateLibraryMeal`) while keeping the same `id`, so week slots that point at it keep their live join. Select by `--name` or `--id`; only the flags you pass change (pass a macro as `""` to clear it), and with `--id` a `--name` renames the meal. A delete+re-add assigns a new `id` and orphans any already-placed week slot — since slots no longer snapshot name/macros, an orphaned slot renders the `(deleted meal)` fallback and contributes 0 to totals.
 - **`migrate-week`** is a one-time data cleanup that rewrites existing week slot rows to the live-join shape (strips the legacy `name_snapshot`/`macros_snapshot` via `MealsCore.cleanSlot`). It is idempotent (already-clean rows are skipped). `--list <name>` targets a week list whose name isn't the literal `week` (the CLI can't read the browser's `DEFAULT_LIST_NAME`); `--dry-run` previews the count without writing.
 - Writes to the real Supabase `listlet_meals` table (`list_name='library'`, or the `migrate-week` `--list`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.

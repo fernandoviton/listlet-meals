@@ -50,6 +50,8 @@ var LibraryView = (function() {
             for (var i = 0; i < items.length; i++) {
                 var meal = MealsCore.parseContent(items[i].content);
                 if (!meal || meal.kind !== 'meal') continue;
+                // Ad-hoc quick-adds stay hidden until promoted to real recipes.
+                if (meal.adhoc === true) continue;
                 html += '<div class="library-card" data-id="' + escapeHtml(items[i].id) + '" role="button" tabindex="0" aria-expanded="false">' +
                     '<span class="library-name">' + escapeHtml(meal.name || '(unnamed)') + '</span>' +
                     '<span class="library-macros">' + escapeHtml(ViewUtils.formatMacros(meal.macros)) + '</span>' +

@@ -4,3 +4,4 @@ config.local.js
 test-results/
 playwright-report/
 local/
+tmp/

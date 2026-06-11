@@ -171,6 +171,9 @@ var MealsCore = (function() {
         for (var i = 0; i < items.length; i++) {
             var parsed = parseContent(items[i].content);
             if (!parsed || parsed.kind !== 'meal') continue;
+            // Ad-hoc meals are hidden from pickers/listings until promoted,
+            // but stay in indexLibrary so placed slots still resolve.
+            if (parsed.adhoc === true) continue;
             out.push({
                 id: items[i].id,
                 name: parsed.name || '',
@@ -292,13 +295,16 @@ var MealsCore = (function() {
             }
         }
 
-        return {
+        var meal = {
             kind: 'meal',
             name: name,
             recipe: normalizeRecipe(input.recipe),
             default_meal_type: mealType,
             macros: macros
         };
+        // Key is present only when true; real (promoted) meals omit it entirely.
+        if (input.adhoc === true) meal.adhoc = true;
+        return meal;
     }
 
     // Merge `changes` onto an existing parsed library meal, keeping its id-bearing
@@ -327,7 +333,8 @@ var MealsCore = (function() {
             default_meal_type: changes.default_meal_type !== undefined
                 ? changes.default_meal_type
                 : existing.default_meal_type,
-            macros: macros
+            macros: macros,
+            adhoc: changes.adhoc !== undefined ? changes.adhoc : existing.adhoc
         });
     }
 
