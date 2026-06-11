@@ -32,7 +32,16 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 │   in-memory items copy. They call into MealsCore for     │
 │   every state transformation and persist via api.        │
 ├──────────────────────────────────────────────────────────┤
-│ meals-core.js — pure functions, no DOM, no window.       │
+│ core/         — pure functions, no DOM, no window.       │
+│   content.js  — MealsContent: parseContent, serialize    │
+│   dates.js    — MealsDates: ISO date math (Phase 1+)     │
+│   library.js  — MealsLibrary: make/update/index/group/   │
+│                 summarize/scale meal definitions         │
+│   slots.js    — MealsSlots: nextOrder/add/move/remove/   │
+│                 setMealType/filter/cleanSlot             │
+│   macros.js   — MealsMacros: resolveSlot, summarizeMacros│
+│ meals-core.js — thin facade re-exporting the flat        │
+│                 MealsCore object the views/CLI call.     │
 │                 Required by Jest, attached to            │
 │                 window.MealsCore in the browser.         │
 ├──────────────────────────────────────────────────────────┤
@@ -89,7 +98,7 @@ Notes:
 
 ## `MealsCore` surface
 
-Defined in `meals-core.js`. All pure, all covered by `tests/unit/meals-core.test.js`.
+Implemented across the `core/` modules and re-exported, unchanged, by the `meals-core.js` facade — view modules and the CLI keep calling the same flat `MealsCore.*` names. Each module uses the same UMD-lite pattern (`var X = (function(){…})(); window.X = X; module.exports = X;`); cross-module deps resolve via `require('./content')` under Node and the script-tag-ordered global in the browser (`index.html` loads `core/content.js` → `dates.js` → `library.js` → `slots.js` → `macros.js` → `meals-core.js`). All pure; covered 1:1 by `tests/unit/{content,dates,library,slots,macros}.test.js` (each requires its module directly, not the facade).
 
 - `parseContent(jsonString)` → object | `null`
 - `serialize(obj)` → string
@@ -183,7 +192,7 @@ Node scripts for tasks the browser app has no UI for yet — currently managing 
 
 ## Tests
 
-- `tests/unit/meals-core.test.js` — Jest, pure-function coverage of `MealsCore`.
+- `tests/unit/{content,dates,library,slots,macros}.test.js` — Jest, pure-function coverage of the `core/` modules (1:1 with the modules).
 - `tests/unit/view-utils.test.js` — Jest, pure-function coverage of `ViewUtils.formatMacros`, `formatQuantity`, and `renderRecipeHtml`.
 - `tests/e2e/*.spec.js` — Playwright, drives the real DOM in mock mode (seed, planner, library, filter, picker, meal-type, delete, touch-drag).
 - `npm test` / `npm run test:e2e` / `npm run test:all`.
@@ -195,7 +204,12 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | Path | Role |
 |---|---|
 | `index.html` | Script tags + boot script |
-| `meals-core.js` | Pure logic, the only place state transitions live |
+| `core/content.js` | `MealsContent` — parse/serialize the JSON `content` |
+| `core/dates.js` | `MealsDates` — ISO date math (filled in Phase 1) |
+| `core/library.js` | `MealsLibrary` — build/update/index/group/summarize/scale meals |
+| `core/slots.js` | `MealsSlots` — slot ordering + add/move/remove/retype |
+| `core/macros.js` | `MealsMacros` — slot→library join, macro summaries |
+| `meals-core.js` | Thin facade re-exporting the flat `MealsCore` object |
 | `app.js` | Shell: dispatch by `?list=`, mock-mode seed |
 | `view/utils.js` | `ViewUtils` — shared view-layer helpers (`formatMacros`, `formatQuantity`, `renderRecipeHtml`) |
 | `view/library.js` | `LibraryView` — renders `?list=library` |
