@@ -1,4 +1,4 @@
-// Week-slot logic: ordering, add / move / remove / retype slots in a (day,
+// Week-slot logic: ordering, add / move / remove / retype slots in a (date,
 // meal_type) section. Pure functions, no DOM, no window access inside.
 // Loaded as a <script> in the browser and require()'d by Jest tests.
 
@@ -7,10 +7,10 @@ var MealsSlots = (function() {
         ? require('./content')
         : MealsContent;
 
-    function nextOrder(slots, day, mealType) {
+    function nextOrder(slots, date, mealType) {
         var max = -1;
         for (var i = 0; i < slots.length; i++) {
-            if (slots[i].day === day && slots[i].meal_type === mealType
+            if (slots[i].date === date && slots[i].meal_type === mealType
                 && typeof slots[i].order === 'number' && slots[i].order > max) {
                 max = slots[i].order;
             }
@@ -18,7 +18,7 @@ var MealsSlots = (function() {
         return max + 1;
     }
 
-    function addSlot(weekItems, libraryMeal, day) {
+    function addSlot(weekItems, libraryMeal, date) {
         var meal = Content.parseContent(libraryMeal.content) || {};
         var existingSlots = [];
         for (var i = 0; i < weekItems.length; i++) {
@@ -29,14 +29,14 @@ var MealsSlots = (function() {
         var slot = {
             kind: 'slot',
             library_id: libraryMeal.id,
-            day: day,
+            date: date,
             meal_type: mealType,
-            order: nextOrder(existingSlots, day, mealType)
+            order: nextOrder(existingSlots, date, mealType)
         };
         return { newSlotContent: Content.serialize(slot) };
     }
 
-    function moveSlot(slots, id, toDay, toMealType, toIndex) {
+    function moveSlot(slots, id, toDate, toMealType, toIndex) {
         var copy = slots.map(function(s) {
             return Object.assign({}, s);
         });
@@ -46,22 +46,22 @@ var MealsSlots = (function() {
         }
         if (!moving) return copy;
 
-        var fromDay = moving.day;
+        var fromDate = moving.date;
         var fromMealType = moving.meal_type;
 
         var targetSection = copy
-            .filter(function(s) { return s.day === toDay && s.meal_type === toMealType && s.id !== id; })
+            .filter(function(s) { return s.date === toDate && s.meal_type === toMealType && s.id !== id; })
             .sort(function(a, b) { return a.order - b.order; });
 
-        moving.day = toDay;
+        moving.date = toDate;
         moving.meal_type = toMealType;
         var clampedIndex = Math.max(0, Math.min(toIndex, targetSection.length));
         targetSection.splice(clampedIndex, 0, moving);
         targetSection.forEach(function(s, idx) { s.order = idx; });
 
-        if (fromDay !== toDay || fromMealType !== toMealType) {
+        if (fromDate !== toDate || fromMealType !== toMealType) {
             var sourceSection = copy
-                .filter(function(s) { return s.day === fromDay && s.meal_type === fromMealType && s.id !== id; })
+                .filter(function(s) { return s.date === fromDate && s.meal_type === fromMealType && s.id !== id; })
                 .sort(function(a, b) { return a.order - b.order; });
             sourceSection.forEach(function(s, idx) { s.order = idx; });
         }
@@ -81,7 +81,7 @@ var MealsSlots = (function() {
         }
         if (!removed) return kept;
         var sameSection = kept
-            .filter(function(s) { return s.day === removed.day && s.meal_type === removed.meal_type; })
+            .filter(function(s) { return s.date === removed.date && s.meal_type === removed.meal_type; })
             .sort(function(a, b) { return a.order - b.order; });
         sameSection.forEach(function(s, idx) { s.order = idx; });
         return kept;
@@ -100,26 +100,13 @@ var MealsSlots = (function() {
         return slots.filter(function(s) { return s.meal_type === type; });
     }
 
-    // Strip the legacy snapshot fields from a parsed slot, keeping only the
-    // live-join shape. Pure; safe to call on already-clean slots (idempotent).
-    function cleanSlot(slot) {
-        return {
-            kind: 'slot',
-            library_id: slot.library_id,
-            day: slot.day,
-            meal_type: slot.meal_type,
-            order: slot.order
-        };
-    }
-
     return {
         nextOrder: nextOrder,
         addSlot: addSlot,
         moveSlot: moveSlot,
         removeSlot: removeSlot,
         setMealType: setMealType,
-        filterSlotsByType: filterSlotsByType,
-        cleanSlot: cleanSlot
+        filterSlotsByType: filterSlotsByType
     };
 })();
 

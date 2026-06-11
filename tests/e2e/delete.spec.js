@@ -1,6 +1,10 @@
 const { test, expect } = require('./fixtures');
 
-function slotItem(id, day, order, name) {
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+const TUE = '2026-06-09';
+
+function slotItem(id, date, order, name) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -8,7 +12,7 @@ function slotItem(id, day, order, name) {
         content: JSON.stringify({
             kind: 'slot',
             library_id: 'lib-' + id,
-            day: day,
+            date: date,
             meal_type: 'lunch',
             order: order
         }),
@@ -46,33 +50,33 @@ async function seed(page, week, library) {
 }
 
 test('opening a slot reveals a delete action in the modal', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week');
-    await page.locator('.day-column[data-day="mon"] .slot-card').click();
+    await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
+    await page.goto('/?list=week&date=' + SAT);
+    await page.locator('.day-column[data-date="' + MON + '"] .slot-card').click();
     await expect(page.locator('#recipe-dialog .dialog-delete')).toBeVisible();
 });
 
 test('confirming delete in the modal removes the slot and persists across reload', async ({ page }) => {
     await seed(page, [
-        slotItem('s1', 'mon', 0, 'Pasta'),
-        slotItem('s2', 'mon', 1, 'Salad'),
-        slotItem('s3', 'tue', 0, 'Soup')
+        slotItem('s1', MON, 0, 'Pasta'),
+        slotItem('s2', MON, 1, 'Salad'),
+        slotItem('s3', TUE, 0, 'Soup')
     ], [
         libraryItem('lib-s1', 'Pasta'),
         libraryItem('lib-s2', 'Salad'),
         libraryItem('lib-s3', 'Soup')
     ]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
     page.on('dialog', d => d.accept());
-    await page.locator('.day-column[data-day="mon"] .slot-card', { hasText: 'Pasta' }).click();
+    await page.locator('.day-column[data-date="' + MON + '"] .slot-card', { hasText: 'Pasta' }).click();
     await page.locator('#recipe-dialog .dialog-delete').click();
 
     // Pasta gone, Salad remains in Mon, Soup untouched.
-    await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText(['Salad']);
-    await expect(page.locator('.day-column[data-day="tue"] .slot-name')).toHaveText(['Soup']);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-name')).toHaveText(['Salad']);
+    await expect(page.locator('.day-column[data-date="' + TUE + '"] .slot-name')).toHaveText(['Soup']);
 
     await page.waitForTimeout(300);
-    await page.goto('/?list=week');
-    await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText(['Salad']);
+    await page.goto('/?list=week&date=' + SAT);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-name')).toHaveText(['Salad']);
 });

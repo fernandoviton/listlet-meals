@@ -4,7 +4,11 @@ const { test, expect, devices } = require('@playwright/test');
 // preset so hasTouch is true and the app exposes the touch code path.
 test.use({ ...devices['Pixel 5'] });
 
-function slotItem(id, day, order, name) {
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+const WED = '2026-06-10';
+
+function slotItem(id, date, order, name) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -12,7 +16,7 @@ function slotItem(id, day, order, name) {
         content: JSON.stringify({
             kind: 'slot',
             library_id: 'lib-' + id,
-            day: day,
+            date: date,
             meal_type: 'lunch',
             order: order
         }),
@@ -113,31 +117,31 @@ async function touchDrag(page, fromSelector, toSelector, opts) {
 }
 
 test('touch-drag from the grab handle moves a slot from Mon to Wed and persists', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week');
+    await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
+    await page.goto('/?list=week&date=' + SAT);
 
     await touchDrag(page,
-        '.day-column[data-day="mon"] .slot-card',
-        '.day-column[data-day="wed"]');
+        '.day-column[data-date="' + MON + '"] .slot-card',
+        '.day-column[data-date="' + WED + '"]');
 
-    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText(['Pasta']);
-    await expect(page.locator('.day-column[data-day="mon"] .slot-card')).toHaveCount(0);
+    await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText(['Pasta']);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-card')).toHaveCount(0);
 
     await page.waitForTimeout(400);
-    await page.goto('/?list=week');
-    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText(['Pasta']);
+    await page.goto('/?list=week&date=' + SAT);
+    await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText(['Pasta']);
 });
 
 test('tapping the card body (not the handle) opens the recipe modal and does NOT move the slot', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week');
+    await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
+    await page.goto('/?list=week&date=' + SAT);
 
     // Tap the slot-name (card body), not the grab handle — should open the
     // recipe modal and leave the slot in Mon.
-    const name = page.locator('.day-column[data-day="mon"] .slot-card .slot-name');
+    const name = page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-name');
     await name.tap();
 
     await expect(page.locator('#recipe-dialog')).toHaveAttribute('open', '');
-    await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText(['Pasta']);
-    await expect(page.locator('.day-column[data-day="wed"] .slot-card')).toHaveCount(0);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-name')).toHaveText(['Pasta']);
+    await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-card')).toHaveCount(0);
 });

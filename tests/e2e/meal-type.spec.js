@@ -1,6 +1,10 @@
 const { test, expect } = require('./fixtures');
 
-function slotItem(id, day, order, name, mealType) {
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+const TUE = '2026-06-09';
+
+function slotItem(id, date, order, name, mealType) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -8,7 +12,7 @@ function slotItem(id, day, order, name, mealType) {
         content: JSON.stringify({
             kind: 'slot',
             library_id: 'lib-' + id,
-            day: day,
+            date: date,
             meal_type: mealType,
             order: order
         }),
@@ -47,55 +51,55 @@ async function seed(page, week, library) {
 
 test('each day column shows meal-type sections; cards live in their section', async ({ page }) => {
     await seed(page, [
-        slotItem('s1', 'mon', 0, 'Pasta', 'dinner'),
-        slotItem('s2', 'tue', 0, 'Salad', 'lunch')
+        slotItem('s1', MON, 0, 'Pasta', 'dinner'),
+        slotItem('s2', TUE, 0, 'Salad', 'lunch')
     ], [
         libraryItem('lib-s1', 'Pasta', 'dinner'),
         libraryItem('lib-s2', 'Salad', 'lunch')
     ]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
     // All 4 sections render per day.
-    await expect(page.locator('.day-column[data-day="mon"] .meal-section')).toHaveCount(4);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .meal-section')).toHaveCount(4);
 
     // Each slot lands in its meal-type section.
     await expect(
-        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="dinner"] .slot-name')
+        page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="dinner"] .slot-name')
     ).toHaveText('Pasta');
     await expect(
-        page.locator('.day-column[data-day="tue"] .meal-section[data-meal-type="lunch"] .slot-name')
+        page.locator('.day-column[data-date="' + TUE + '"] .meal-section[data-meal-type="lunch"] .slot-name')
     ).toHaveText('Salad');
 });
 
 test('dragging a slot to a different meal-type section updates meal_type and persists', async ({ page }) => {
-    await seed(page, [slotItem('s1', 'mon', 0, 'Pasta', 'dinner')],
+    await seed(page, [slotItem('s1', MON, 0, 'Pasta', 'dinner')],
         [libraryItem('lib-s1', 'Pasta', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
-    const grab = page.locator('.day-column[data-day="mon"] .slot-card .slot-grab');
-    const lunchSection = page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"]');
+    const grab = page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-grab');
+    const lunchSection = page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="lunch"]');
     await grab.dragTo(lunchSection);
 
     // Card now lives in the lunch section.
     await expect(
-        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"] .slot-name')
+        page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="lunch"] .slot-name')
     ).toHaveText('Pasta');
     await expect(
-        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="dinner"] .slot-card')
+        page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="dinner"] .slot-card')
     ).toHaveCount(0);
 
     // Filter to "Dinner" — card hidden.
     await page.locator('.filter-pill[data-filter="dinner"]').click();
-    await expect(page.locator('.day-column[data-day="mon"] .slot-card')).toHaveCount(0);
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-card')).toHaveCount(0);
 
     // Filter to "Lunch" — card visible.
     await page.locator('.filter-pill[data-filter="lunch"]').click();
-    await expect(page.locator('.day-column[data-day="mon"] .slot-name')).toHaveText('Pasta');
+    await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-name')).toHaveText('Pasta');
 
     // Reload — change persists.
     await page.waitForTimeout(500);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
     await expect(
-        page.locator('.day-column[data-day="mon"] .meal-section[data-meal-type="lunch"] .slot-name')
+        page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="lunch"] .slot-name')
     ).toHaveText('Pasta');
 });

@@ -32,7 +32,6 @@ var MealsCore = (function() {
         removeSlot: Slots.removeSlot,
         setMealType: Slots.setMealType,
         filterSlotsByType: Slots.filterSlotsByType,
-        cleanSlot: Slots.cleanSlot,
         // macros
         summarizeMacros: Macros.summarizeMacros,
         resolveSlot: Macros.resolveSlot,

@@ -1,5 +1,12 @@
 const { test, expect } = require('./fixtures');
 
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+const TUE = '2026-06-09';
+const WED = '2026-06-10';
+const THU = '2026-06-11';
+const FRI = '2026-06-12';
+
 function libraryMealRow(id, name, mealType, macros) {
     const now = new Date().toISOString();
     return {
@@ -26,8 +33,8 @@ async function seed(page, week, library) {
     }, { week, library });
 }
 
-async function quickAdd(page, day, fields) {
-    await page.locator('.day-column[data-day="' + day + '"] .day-add').click();
+async function quickAdd(page, date, fields) {
+    await page.locator('.day-column[data-date="' + date + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-quick-add').click();
     const form = page.locator('#picker-dialog .quick-add-form');
     await form.locator('input[name="name"]').fill(fields.name);
@@ -39,33 +46,33 @@ async function quickAdd(page, day, fields) {
 
 test('quick add: creates an ad-hoc meal and places it on the day, persisting both rows', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
-    await quickAdd(page, 'wed', { name: 'Leftover curry', cal: 550 });
+    await quickAdd(page, WED, { name: 'Leftover curry', cal: 550 });
 
     // Dialog closes; slot lands in Wed with its macros and counts toward totals.
     await expect(page.locator('#picker-dialog')).not.toHaveAttribute('open', '');
-    const wed = page.locator('.day-column[data-day="wed"]');
+    const wed = page.locator('.day-column[data-date="' + WED + '"]');
     await expect(wed.locator('.slot-name')).toHaveText('Leftover curry');
     await expect(wed.locator('.slot-macros')).toHaveText('550 cal');
     await expect(wed.locator('.day-summary')).toHaveText('550 cal');
 
     // Reload — both the library row and the slot survived.
     await page.waitForTimeout(300);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
     await expect(wed.locator('.slot-name')).toHaveText('Leftover curry');
     await expect(wed.locator('.day-summary')).toHaveText('550 cal');
 });
 
 test('quick add: ad-hoc meal stays hidden from the picker and the library page', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
-    await quickAdd(page, 'wed', { name: 'Leftover curry' });
-    await expect(page.locator('.day-column[data-day="wed"] .slot-name')).toHaveText('Leftover curry');
+    await quickAdd(page, WED, { name: 'Leftover curry' });
+    await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText('Leftover curry');
 
     // Reopen the picker — only the real library meal is listed.
-    await page.locator('.day-column[data-day="thu"] .day-add').click();
+    await page.locator('.day-column[data-date="' + THU + '"] .day-add').click();
     await expect(page.locator('#picker-dialog .picker-meal')).toHaveText(['Other']);
     await page.locator('#picker-dialog .picker-close').click();
 
@@ -77,10 +84,10 @@ test('quick add: ad-hoc meal stays hidden from the picker and the library page',
 
 test('quick add: still available when the picker list is empty for the active filter', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-toast', 'Toast', 'breakfast')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
     await page.locator('.filter-pill[data-filter="dinner"]').click();
-    await page.locator('.day-column[data-day="mon"] .day-add').click();
+    await page.locator('.day-column[data-date="' + MON + '"] .day-add').click();
 
     const dialog = page.locator('#picker-dialog');
     await expect(dialog.locator('.picker-empty')).toBeVisible();
@@ -91,16 +98,16 @@ test('quick add: still available when the picker list is empty for the active fi
     await form.locator('input[name="name"]').fill('Takeout pizza');
     await form.locator('button[type="submit"]').click();
 
-    await expect(page.locator('.meal-section[data-day="mon"][data-meal-type="dinner"] .slot-name'))
+    await expect(page.locator('.meal-section[data-date="' + MON + '"][data-meal-type="dinner"] .slot-name'))
         .toHaveText('Takeout pizza');
 });
 
 test('quick add: meal-type select defaults to the active filter and places the slot in that section', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
     await page.locator('.filter-pill[data-filter="lunch"]').click();
-    await page.locator('.day-column[data-day="tue"] .day-add').click();
+    await page.locator('.day-column[data-date="' + TUE + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-quick-add').click();
 
     const form = page.locator('#picker-dialog .quick-add-form');
@@ -108,29 +115,29 @@ test('quick add: meal-type select defaults to the active filter and places the s
     await form.locator('input[name="name"]').fill('Deli sandwich');
     await form.locator('button[type="submit"]').click();
 
-    await expect(page.locator('.meal-section[data-day="tue"][data-meal-type="lunch"] .slot-name'))
+    await expect(page.locator('.meal-section[data-date="' + TUE + '"][data-meal-type="lunch"] .slot-name'))
         .toHaveText('Deli sandwich');
 });
 
 test('quick add: blank name shows an inline error and keeps the dialog open', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
-    await page.locator('.day-column[data-day="wed"] .day-add').click();
+    await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-quick-add').click();
     await page.locator('#picker-dialog .quick-add-form button[type="submit"]').click();
 
     await expect(page.locator('#picker-dialog')).toHaveAttribute('open', '');
     await expect(page.locator('#picker-dialog .quick-add-error')).toBeVisible();
-    await expect(page.locator('.day-column[data-day="wed"] .slot-card')).toHaveCount(0);
+    await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-card')).toHaveCount(0);
 });
 
 test('quick add: recipe modal on an ad-hoc slot shows a no-recipe note and no scale stepper', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week');
+    await page.goto('/?list=week&date=' + SAT);
 
-    await quickAdd(page, 'fri', { name: 'Leftover curry', cal: 550 });
-    await page.locator('.day-column[data-day="fri"] .slot-card').click();
+    await quickAdd(page, FRI, { name: 'Leftover curry', cal: 550 });
+    await page.locator('.day-column[data-date="' + FRI + '"] .slot-card').click();
 
     const dialog = page.locator('#recipe-dialog');
     await expect(dialog).toHaveAttribute('open', '');

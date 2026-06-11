@@ -122,6 +122,38 @@ body::before {
     box-shadow: inset 0 0 0 1px var(--ink), 0 6px 16px -8px rgba(27,29,22,0.5);
 }
 
+/* ---------- Week navigation ---------- */
+
+.week-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 1rem;
+    flex-wrap: wrap;
+}
+.week-nav-label {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--ink);
+    margin-right: auto;
+}
+.week-nav a {
+    text-decoration: none;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    background: var(--paper);
+    transition: color .18s ease, background .18s ease;
+}
+.week-nav a:hover { color: var(--ink); background: var(--bg-tint); }
+.week-nav-arrow { line-height: 1; }
+.week-nav-trends { color: var(--olive); }
+
 /* ---------- Week grid ---------- */
 
 .week-grid {
@@ -151,6 +183,11 @@ body::before {
     background: linear-gradient(90deg, var(--tomato), var(--mustard) 60%, var(--olive));
     opacity: 0.55;
 }
+.day-column.today {
+    border-color: var(--tomato);
+    box-shadow: var(--shadow-1), 0 0 0 1px var(--tomato);
+}
+.day-column.today::before { opacity: 1; }
 
 .day-header {
     display: flex;
