@@ -4,6 +4,13 @@
 var App = (function() {
     function init(el, listName) {
         var api = createApi(listName);
+        // The trends view reads the week list, so it's gated on ?view=trends
+        // before the list branch. (?list=library&view=trends is harmless-empty.)
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('view') === 'trends') {
+            TrendsView.init(el, api);
+            return;
+        }
         if (listName === 'library') {
             LibraryView.init(el, api);
         } else {

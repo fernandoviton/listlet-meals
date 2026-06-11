@@ -306,6 +306,95 @@ body::before {
     min-height: 1.5em;
 }
 
+/* ---------- Trends view ---------- */
+
+.trends {
+    padding: clamp(0.75rem, 2.5vw, 2rem);
+    max-width: 1100px;
+    margin: 0 auto;
+}
+.trends-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.trends-title {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--ink);
+    margin-right: auto;
+}
+.trends-header a {
+    text-decoration: none;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    background: var(--paper);
+    transition: color .18s ease, background .18s ease;
+}
+.trends-header a:hover { color: var(--ink); background: var(--bg-tint); }
+.trends-range { display: inline-flex; gap: 0.4rem; }
+.trends-pill.active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+
+.trends-section {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 0.9rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-1);
+}
+.trends-section-title {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ink-2);
+    margin-bottom: 0.6rem;
+}
+.trends-chart {
+    display: block;
+    width: 100%;
+    height: 140px;
+    overflow: visible;
+}
+.trends-bar { fill: var(--tomato); opacity: 0.85; }
+.trends-tick {
+    fill: var(--ink-2);
+    font-family: var(--mono);
+    font-size: 9px;
+}
+
+.trends-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+}
+.trends-table th, .trends-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: right;
+    border-bottom: 1px solid var(--line-soft);
+}
+.trends-table th:first-child, .trends-table td:first-child { text-align: left; }
+.trends-table th {
+    background: var(--paper-2);
+    color: var(--ink-2);
+    font-weight: 600;
+}
+.trends-table tbody tr:last-child td { border-bottom: none; }
+.trends-table .tcell-week { font-weight: 600; color: var(--ink); }
+
 /* ---------- Slot card (tap to open, drag handle to move) ---------- */
 
 .slot-card {
