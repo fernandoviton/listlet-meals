@@ -370,24 +370,26 @@ var WeekView = (function() {
         if (typeof dialog.showModal === 'function') dialog.showModal();
 
         if (!libraryApi) libraryApi = createApi('library');
-        var libItems;
         try {
-            libItems = await libraryApi.fetchItems();
-            libraryCache = libItems;
+            libraryCache = await libraryApi.fetchItems();
         } catch (err) {
             bodyEl.innerHTML = '<div class="picker-empty">Failed to load library.</div>';
             return;
         }
+        renderPickerList(bodyEl, day);
+    }
 
-        var groups = MealsCore.groupLibraryByType(libItems, currentFilter);
+    function renderPickerList(bodyEl, day) {
+        // Quick add comes first so it stays available when the library is
+        // empty or the active filter leaves nothing to pick.
+        var html = '<button type="button" class="picker-quick-add">+ Quick add</button>';
+        var groups = MealsCore.groupLibraryByType(libraryCache, currentFilter);
         if (!groups.length) {
             var msg = currentFilter !== 'all'
                 ? 'No ' + (MEAL_TYPE_LABELS[currentFilter] || currentFilter) + ' meals in library yet.'
                 : 'No meals in library yet.';
-            bodyEl.innerHTML = '<div class="picker-empty">' + escapeHtml(msg) + '</div>';
-            return;
+            html += '<div class="picker-empty">' + escapeHtml(msg) + '</div>';
         }
-        var html = '';
         for (var g = 0; g < groups.length; g++) {
             var group = groups[g];
             html += '<div class="picker-group" data-meal-type="' + group.meal_type + '">';
@@ -400,10 +402,115 @@ var WeekView = (function() {
             html += '</div>';
         }
         bodyEl.innerHTML = html;
+        bodyEl.querySelector('.picker-quick-add').addEventListener('click', function() {
+            renderQuickAddForm(bodyEl, day);
+        });
         var btns = bodyEl.querySelectorAll('.picker-meal');
         for (var j = 0; j < btns.length; j++) {
             btns[j].addEventListener('click', onPickMeal);
         }
+    }
+
+    function renderQuickAddForm(bodyEl, day) {
+        var preType = currentFilter !== 'all' ? currentFilter : 'dinner';
+        var html = '<form class="quick-add-form" novalidate>';
+        html += '<label class="quick-add-label">Name' +
+            '<input type="text" name="name" autocomplete="off" placeholder="e.g. Leftover curry">' +
+            '</label>';
+        html += '<label class="quick-add-label">Meal type<select name="type">';
+        for (var t = 0; t < MEAL_TYPES.length; t++) {
+            var mt = MEAL_TYPES[t];
+            html += '<option value="' + mt + '"' + (mt === preType ? ' selected' : '') + '>' +
+                MEAL_TYPE_LABELS[mt] + '</option>';
+        }
+        html += '</select></label>';
+        html += '<div class="quick-add-macros">';
+        var macroFields = [['cal', 'Calories'], ['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']];
+        for (var m = 0; m < macroFields.length; m++) {
+            html += '<label class="quick-add-label">' + macroFields[m][1] +
+                '<input type="text" inputmode="decimal" name="' + macroFields[m][0] + '" autocomplete="off">' +
+                '</label>';
+        }
+        html += '</div>';
+        html += '<div class="quick-add-error" hidden></div>';
+        html += '<div class="quick-add-actions">' +
+            '<button type="button" class="quick-add-back">Back</button>' +
+            '<button type="submit" class="quick-add-submit">Add to ' + escapeHtml(DAY_LABELS[day] || day) + '</button>' +
+            '</div>';
+        html += '</form>';
+        bodyEl.innerHTML = html;
+
+        var form = bodyEl.querySelector('.quick-add-form');
+        form.addEventListener('submit', function(e) { onQuickAddSubmit(e, day); });
+        bodyEl.querySelector('.quick-add-back').addEventListener('click', function() {
+            renderPickerList(bodyEl, day);
+        });
+        form.querySelector('input[name="name"]').focus();
+    }
+
+    async function onQuickAddSubmit(e, day) {
+        e.preventDefault();
+        var form = e.currentTarget;
+        var dialog = document.getElementById('picker-dialog');
+        var errEl = form.querySelector('.quick-add-error');
+        var submitBtn = form.querySelector('.quick-add-submit');
+
+        function fail(msg) {
+            errEl.textContent = msg;
+            errEl.hidden = false;
+            submitBtn.disabled = false;
+        }
+
+        var meal;
+        try {
+            meal = MealsCore.makeLibraryMeal({
+                name: form.elements['name'].value,
+                default_meal_type: form.elements['type'].value,
+                macros: {
+                    cal: form.elements['cal'].value,
+                    protein: form.elements['protein'].value,
+                    carbs: form.elements['carbs'].value,
+                    fat: form.elements['fat'].value
+                },
+                adhoc: true
+            });
+        } catch (err) {
+            fail(err.message);
+            return;
+        }
+
+        submitBtn.disabled = true;
+
+        var created;
+        try {
+            created = await libraryApi.createItem({ content: MealsCore.serialize(meal) });
+        } catch (err) {
+            fail('Could not save meal.');
+            return;
+        }
+        if (libraryCache) libraryCache.push(created);
+        libraryById[created.id] = meal;
+
+        var result = MealsCore.addSlot(items, created, day);
+        try {
+            await api.createItem({ content: result.newSlotContent });
+        } catch (err) {
+            // Roll back the just-created ad-hoc row so it doesn't linger
+            // invisibly (if even this fails, `library.js list --adhoc` finds it).
+            try { await libraryApi.deleteItem(created.id); } catch (err2) { /* ignore */ }
+            if (libraryCache) {
+                libraryCache = libraryCache.filter(function(r) { return r.id !== created.id; });
+            }
+            delete libraryById[created.id];
+            fail('Could not add to ' + (DAY_LABELS[day] || day) + '.');
+            return;
+        }
+
+        dialog.close();
+        try {
+            items = await api.fetchItems();
+        } catch (err) { /* keep local state; slot was persisted */ }
+        render();
     }
 
     async function onPickMeal(e) {
@@ -473,15 +580,23 @@ var WeekView = (function() {
         var scaleEl = bodyEl.querySelector('.recipe-scale');
         var valueEl = scaleEl.querySelector('.scale-value');
 
+        var meal = {};
         var recipe = {};
         try {
-            var meal = await getLibraryMeal(libraryId);
+            meal = await getLibraryMeal(libraryId);
             recipe = meal.recipe || {};
         } catch (err) {
             recipe = {};
         }
         // The user may have opened a different slot while we awaited the fetch.
         if (dialog.dataset.slotId !== id) return;
+
+        // Ad-hoc meals have no recipe yet — show a note and skip the scale
+        // stepper (scaling an empty recipe is pointless).
+        if (meal.adhoc === true) {
+            recipeEl.innerHTML = '<div class="dialog-adhoc-note">Quick-added — no recipe yet.</div>';
+            return;
+        }
 
         // Closure over the resolved recipe + the slot's raw macros — dataset holds
         // only the integer factor as a string.

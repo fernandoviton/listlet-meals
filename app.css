@@ -491,6 +491,109 @@ dialog#recipe-dialog[open] {
     font-family: var(--serif);
 }
 
+/* Quick add — ad-hoc meal entry */
+.picker-quick-add {
+    background: transparent;
+    border: 1px dashed var(--tomato);
+    border-radius: var(--r-sm);
+    padding: 0.7rem 0.9rem;
+    min-height: 44px;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 1rem;
+    color: var(--tomato);
+    transition: background .15s ease;
+}
+.picker-quick-add:hover { background: rgba(195,74,44,0.06); }
+
+.quick-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 0.25rem;
+}
+.quick-add-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.quick-add-form input,
+.quick-add-form select {
+    font-family: var(--sans);
+    font-size: 1rem;            /* ≥16px so iOS doesn't zoom on focus */
+    color: var(--ink);
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.65rem 0.75rem;
+    min-height: 44px;
+}
+.quick-add-form input:focus,
+.quick-add-form select:focus {
+    outline: 2px solid var(--tomato);
+    outline-offset: -1px;
+}
+.quick-add-macros {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+.quick-add-error {
+    color: var(--tomato);
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+.quick-add-actions {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.25rem;
+}
+.quick-add-back {
+    padding: 0.55rem 1rem;
+    min-height: 44px;
+    border: 1px solid var(--line);
+    background: transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.quick-add-submit {
+    flex: 1;
+    padding: 0.55rem 1rem;
+    min-height: 44px;
+    border: 1px solid var(--tomato);
+    background: var(--tomato);
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--paper);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: filter .15s ease;
+}
+.quick-add-submit:hover { filter: brightness(1.08); }
+.quick-add-submit:disabled { opacity: 0.6; cursor: default; }
+
+.dialog-adhoc-note {
+    color: var(--muted);
+    font-style: italic;
+    font-family: var(--serif);
+    padding: 0.5rem 0 1rem;
+}
+
 .picker-close {
     margin: 0.5rem 1rem 1.1rem;
     padding: 0.55rem 1rem;
