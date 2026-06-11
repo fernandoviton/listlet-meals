@@ -29,7 +29,8 @@ const LIST = 'library';
 const USAGE = `Usage: node scripts/library.js <command> [options]
 
 Commands:
-  list                      List every meal in the library
+  list [--adhoc]            List every meal in the library (ad-hoc quick-adds are
+                              tagged [adhoc]; --adhoc shows only those)
   add  --name <n> [opts]    Add a meal
   update --id <uuid> [opts] Edit a meal in place (keeps the id, so placed week
   update --name <n> [opts]    slots keep their recipe link). Select by --name OR
@@ -49,6 +50,10 @@ add options:
 
 update options:
   --file <path.json>        whole-meal JSON base; scalar flags override its fields.
+                              Also promotes an ad-hoc meal: --file clears the adhoc
+                              flag (a full recipe means it's a real meal now).
+  --adhoc <true|false>      set or clear the adhoc flag explicitly (overrides the
+                              --file auto-clear)
   same scalar fields as add; only what you pass changes. Pass a macro as "" to clear it.
 
 migrate-week options:
@@ -115,16 +120,27 @@ async function fetchLibrary() {
     return (data || []).map((row) => ({ id: row.id, meal: MealsCore.parseContent(row.content) }));
 }
 
-async function cmdList() {
-    const rows = await fetchLibrary();
+// parseArgs yields boolean true for a bare --adhoc and the string 'true'/'false'
+// when a value follows; normalize both forms.
+function parseAdhocFlag(v) {
+    if (v === true || v === 'true') return true;
+    if (v === 'false') return false;
+    throw new Error('--adhoc takes true or false');
+}
+
+async function cmdList(args) {
+    let rows = await fetchLibrary();
+    const adhocOnly = args.adhoc !== undefined && parseAdhocFlag(args.adhoc);
+    if (adhocOnly) rows = rows.filter((r) => r.meal && r.meal.adhoc === true);
     if (rows.length === 0) {
-        console.log('(library is empty)');
+        console.log(adhocOnly ? '(no ad-hoc meals)' : '(library is empty)');
         return;
     }
     for (const { id, meal } of rows) {
         const m = meal || {};
         const macros = ViewUtils.formatMacros(m.macros);
-        console.log(`${id}  ${m.name || '(unnamed)'}  [${m.default_meal_type || '?'}]${macros ? '  ' + macros : ''}`);
+        const tag = m.adhoc === true ? '  [adhoc]' : '';
+        console.log(`${id}  ${m.name || '(unnamed)'}  [${m.default_meal_type || '?'}]${tag}${macros ? '  ' + macros : ''}`);
     }
 }
 
@@ -141,7 +157,8 @@ async function cmdAdd(args) {
         name: typeof args.name === 'string' ? args.name : base.name,
         recipe: base.recipe,
         default_meal_type: typeof args.type === 'string' ? args.type : base.default_meal_type,
-        macros: macros
+        macros: macros,
+        adhoc: args.adhoc !== undefined ? parseAdhocFlag(args.adhoc) : undefined
     });
     const { data, error } = await supabase
         .from(DB_TABLE)
@@ -200,8 +217,14 @@ async function cmdUpdate(args) {
     }
     if (hasMacro) changes.macros = macros;
 
+    // Promotion: an explicit --adhoc wins; otherwise supplying a --file (a full
+    // recipe) clears the flag — the meal is real now. Harmless on non-adhoc
+    // rows since core omits a false flag entirely.
+    if (args.adhoc !== undefined) changes.adhoc = parseAdhocFlag(args.adhoc);
+    else if (typeof args.file === 'string') changes.adhoc = false;
+
     if (Object.keys(changes).length === 0) {
-        throw new Error('nothing to update — pass --file, --name, --type, or a macro flag');
+        throw new Error('nothing to update — pass --file, --name, --type, --adhoc, or a macro flag');
     }
 
     const updated = MealsCore.updateLibraryMeal(target.meal, changes);
@@ -295,7 +318,7 @@ async function main() {
     ({ supabase, login, DB_TABLE } = require('./supabase-cli'));
     await login();
 
-    if (command === 'list') await cmdList();
+    if (command === 'list') await cmdList(args);
     else if (command === 'add') await cmdAdd(args);
     else if (command === 'update') await cmdUpdate(args);
     else if (command === 'delete') await cmdDelete(args);
