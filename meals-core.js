@@ -35,6 +35,8 @@ var MealsCore = (function() {
         // macros
         summarizeMacros: Macros.summarizeMacros,
         resolveSlot: Macros.resolveSlot,
+        summarizeMacrosByDate: Macros.summarizeMacrosByDate,
+        summarizeWeeklyAverages: Macros.summarizeWeeklyAverages,
         // library
         indexLibrary: Library.indexLibrary,
         summarizeLibrary: Library.summarizeLibrary,
