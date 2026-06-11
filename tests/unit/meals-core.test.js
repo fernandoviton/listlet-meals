@@ -88,6 +88,16 @@ describe('meals-core', () => {
             expect(MealsCore.indexLibrary(null)).toEqual({});
             expect(MealsCore.indexLibrary()).toEqual({});
         });
+
+        test('includes ad-hoc meals so placed slots still resolve', () => {
+            const items = [
+                { id: 'a', content: JSON.stringify({ kind: 'meal', name: 'Pasta' }) },
+                { id: 'b', content: JSON.stringify({ kind: 'meal', name: 'Leftover curry', adhoc: true }) }
+            ];
+            const map = MealsCore.indexLibrary(items);
+            expect(Object.keys(map).sort()).toEqual(['a', 'b']);
+            expect(map.b.adhoc).toBe(true);
+        });
     });
 
     describe('resolveSlot', () => {
@@ -377,6 +387,16 @@ describe('meals-core', () => {
                 { id: 'x', name: '', default_meal_type: 'dinner' }
             ]);
         });
+
+        test('excludes ad-hoc meals', () => {
+            const items = [
+                { id: 'a', content: JSON.stringify({ kind: 'meal', name: 'Pasta', default_meal_type: 'dinner' }) },
+                { id: 'b', content: JSON.stringify({ kind: 'meal', name: 'Leftover curry', default_meal_type: 'dinner', adhoc: true }) }
+            ];
+            expect(MealsCore.summarizeLibrary(items)).toEqual([
+                { id: 'a', name: 'Pasta', default_meal_type: 'dinner' }
+            ]);
+        });
     });
 
     describe('groupLibraryByType', () => {
@@ -439,6 +459,17 @@ describe('meals-core', () => {
                 meal('1', 'Toast', 'breakfast'),
                 { id: '2', content: JSON.stringify({ kind: 'slot', name_snapshot: 'X' }) },
                 { id: '3', content: 'not json' }
+            ];
+            const out = MealsCore.groupLibraryByType(items);
+            expect(out).toEqual([
+                { meal_type: 'breakfast', meals: [{ id: '1', name: 'Toast', default_meal_type: 'breakfast' }] }
+            ]);
+        });
+
+        test('excludes ad-hoc meals (hidden from the picker until promoted)', () => {
+            const items = [
+                meal('1', 'Toast', 'breakfast'),
+                { id: '2', content: JSON.stringify({ kind: 'meal', name: 'Leftover curry', default_meal_type: 'breakfast', adhoc: true }) }
             ];
             const out = MealsCore.groupLibraryByType(items);
             expect(out).toEqual([
@@ -574,6 +605,23 @@ describe('meals-core', () => {
                 macros: { cal: 100, fiber: 9 }
             }).macros).toEqual({ cal: 100 });
         });
+
+        test('carries adhoc: true through when set', () => {
+            expect(MealsCore.makeLibraryMeal({ name: 'Leftover curry', adhoc: true })).toEqual({
+                kind: 'meal',
+                name: 'Leftover curry',
+                recipe: { ingredients: [], steps: [] },
+                default_meal_type: 'dinner',
+                macros: {},
+                adhoc: true
+            });
+        });
+
+        test('omits the adhoc key when absent, false, or junk', () => {
+            expect('adhoc' in MealsCore.makeLibraryMeal({ name: 'X' })).toBe(false);
+            expect('adhoc' in MealsCore.makeLibraryMeal({ name: 'X', adhoc: false })).toBe(false);
+            expect('adhoc' in MealsCore.makeLibraryMeal({ name: 'X', adhoc: 'yes' })).toBe(false);
+        });
     });
 
     describe('updateLibraryMeal', () => {
@@ -623,6 +671,26 @@ describe('meals-core', () => {
         test('throws when the existing row is not a meal', () => {
             expect(() => MealsCore.updateLibraryMeal({ kind: 'slot' }, { recipe: 'x' })).toThrow(/meal/i);
             expect(() => MealsCore.updateLibraryMeal(null, { recipe: 'x' })).toThrow(/meal/i);
+        });
+
+        test('preserves the adhoc flag when changes do not mention it', () => {
+            const adhocBase = { ...base, adhoc: true };
+            expect(MealsCore.updateLibraryMeal(adhocBase, { macros: { cal: 400 } }).adhoc).toBe(true);
+        });
+
+        test('a recipe-only change does not clear the adhoc flag', () => {
+            const adhocBase = { ...base, adhoc: true };
+            const newRecipe = { ingredients: [{ qty: 1, unit: 'cup', item: 'rice' }], steps: ['Cook.'] };
+            expect(MealsCore.updateLibraryMeal(adhocBase, { recipe: newRecipe }).adhoc).toBe(true);
+        });
+
+        test('adhoc: false removes the key entirely (promotion)', () => {
+            const adhocBase = { ...base, adhoc: true };
+            expect('adhoc' in MealsCore.updateLibraryMeal(adhocBase, { adhoc: false })).toBe(false);
+        });
+
+        test('adhoc: true can be set on a normal meal', () => {
+            expect(MealsCore.updateLibraryMeal(base, { adhoc: true }).adhoc).toBe(true);
         });
     });
 
