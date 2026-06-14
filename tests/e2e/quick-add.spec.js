@@ -28,7 +28,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        if (week) localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        if (week) localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         if (library) localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, { week, library });
 }
@@ -46,7 +46,7 @@ async function quickAdd(page, date, fields) {
 
 test('quick add: creates an ad-hoc meal and places it on the day, persisting both rows', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await quickAdd(page, WED, { name: 'Leftover curry', cal: 550 });
 
@@ -59,14 +59,14 @@ test('quick add: creates an ad-hoc meal and places it on the day, persisting bot
 
     // Reload — both the library row and the slot survived.
     await page.waitForTimeout(300);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(wed.locator('.slot-name')).toHaveText('Leftover curry');
     await expect(wed.locator('.day-summary')).toHaveText('550 cal');
 });
 
 test('quick add: ad-hoc meal stays hidden from the picker and the library page', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await quickAdd(page, WED, { name: 'Leftover curry' });
     await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText('Leftover curry');
@@ -84,7 +84,7 @@ test('quick add: ad-hoc meal stays hidden from the picker and the library page',
 
 test('quick add: still available when the picker list is empty for the active filter', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-toast', 'Toast', 'breakfast')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.filter-pill[data-filter="dinner"]').click();
     await page.locator('.day-column[data-date="' + MON + '"] .day-add').click();
@@ -104,7 +104,7 @@ test('quick add: still available when the picker list is empty for the active fi
 
 test('quick add: meal-type select defaults to the active filter and places the slot in that section', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.filter-pill[data-filter="lunch"]').click();
     await page.locator('.day-column[data-date="' + TUE + '"] .day-add').click();
@@ -121,7 +121,7 @@ test('quick add: meal-type select defaults to the active filter and places the s
 
 test('quick add: blank name shows an inline error and keeps the dialog open', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-quick-add').click();
@@ -134,7 +134,7 @@ test('quick add: blank name shows an inline error and keeps the dialog open', as
 
 test('quick add: recipe modal on an ad-hoc slot shows a no-recipe note and no scale stepper', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await quickAdd(page, FRI, { name: 'Leftover curry', cal: 550 });
     await page.locator('.day-column[data-date="' + FRI + '"] .slot-card').click();

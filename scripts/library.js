@@ -58,7 +58,7 @@ update options:
 trends options:
   --from <iso> --to <iso>   date range (default: to = today, from = to − 27 days)
   --format csv|json         output format (default csv)
-  --list <name>             week list_name to read (default "week")`;
+  --list <name>             calendar list_name to read (required)`;
 
 function parseArgs(argv) {
     const args = {};
@@ -264,12 +264,15 @@ async function cmdDelete(args) {
     console.log(`Deleted ${id}`);
 }
 
-// Export per-day macro totals over [from, to]. Reads the dated week list +
-// library, joins them live (summarizeMacrosByDate), and prints one row per day
+// Export per-day macro totals over [from, to]. Reads the named dated calendar
+// list + library, joins them live (summarizeMacrosByDate), prints one row per day
 // in the inclusive range — empty days included (proves the pipeline even with
 // no data). CSV header: date,cal,protein,carbs,fat; JSON: { from, to, days }.
 async function cmdTrends(args) {
-    const weekList = typeof args.list === 'string' ? args.list : 'week';
+    if (typeof args.list !== 'string' || !args.list.trim()) {
+        throw new Error('--list <name> is required (the calendar list to read; there is no default)');
+    }
+    const listName = args.list.trim();
     const to = typeof args.to === 'string' ? args.to : ViewUtils.localIsoDate(new Date());
     const from = typeof args.from === 'string' ? args.from : MealsCore.addDays(to, -27);
     const format = args.format === 'json' ? 'json' : 'csv';
@@ -279,7 +282,7 @@ async function cmdTrends(args) {
     }
 
     const libraryById = MealsCore.indexLibrary(await fetchRows(LIST));
-    const slots = (await fetchRows(weekList))
+    const slots = (await fetchRows(listName))
         .map((r) => MealsCore.parseContent(r.content))
         .filter((p) => p && p.kind === 'slot' && MealsCore.isIsoDate(p.date));
     const byDate = MealsCore.summarizeMacrosByDate(slots, libraryById);

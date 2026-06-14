@@ -49,7 +49,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        if (week) localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        if (week) localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         if (library) localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, { week, library });
 }
@@ -62,7 +62,7 @@ test('week view renders Sat→Fri columns with seeded slots', async ({ page }) =
         libraryItem('lib-pasta', 'Pasta', 'boil', { meal_type: 'dinner' }),
         libraryItem('lib-salad', 'Salad', 'toss', { meal_type: 'lunch' })
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const headers = page.locator('.day-header .day-label');
     await expect(headers).toHaveText([
@@ -79,7 +79,7 @@ test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page
     ], [
         libraryItem('lib-pasta', 'Pasta', 'boil')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const source = page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-grab');
     const target = page.locator('.day-column[data-date="' + WED + '"]');
@@ -90,7 +90,7 @@ test('drag a slot from Mon to Wed and reload — it stays in Wed', async ({ page
 
     // Wait for debounced save then reload
     await page.waitForTimeout(500);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText('Pasta');
 });
 
@@ -107,7 +107,7 @@ test('clicking a slot card opens the recipe modal', async ({ page }) => {
         [slotItem('s1', MON, 0, 'Pasta', { library_id: 'lib-pasta' })],
         [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE)]
     );
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const card = page.locator('.day-column[data-date="' + MON + '"] .slot-card');
     const dialog = page.locator('#recipe-dialog');
@@ -131,7 +131,7 @@ test('a focused slot card opens the recipe modal on Enter and Space', async ({ p
         [slotItem('s1', MON, 0, 'Pasta', { library_id: 'lib-pasta' })],
         [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE)]
     );
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const card = page.locator('.day-column[data-date="' + MON + '"] .slot-card');
     const dialog = page.locator('#recipe-dialog');
@@ -156,7 +156,7 @@ test('a slot added via the picker from the real demo seed shows its recipe', asy
     // library → add a meal via the picker → open the slot modal.
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-meal', { hasText: 'Oatmeal' }).click();
@@ -176,7 +176,7 @@ test('the ×N stepper scales ingredient quantities and the macro line', async ({
         [slotItem('s1', MON, 0, 'Pasta', { library_id: 'lib-pasta', macros: { cal: 500, protein: 20 } })],
         [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE, { macros: { cal: 500, protein: 20 } })]
     );
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const dialog = page.locator('#recipe-dialog');
     await page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-name').click();

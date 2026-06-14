@@ -10,8 +10,7 @@ exports.test = base.test.extend({
                 SUPABASE_URL: null,
                 SUPABASE_PUBLISHABLE_KEY: null,
                 APP_TITLE: 'Listlet Meals',
-                DB_TABLE: 'listlet_meals',
-                DEFAULT_LIST_NAME: 'week'
+                DB_TABLE: 'listlet_meals'
             };
         });
         await use(page);

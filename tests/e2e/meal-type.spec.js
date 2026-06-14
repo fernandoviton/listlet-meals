@@ -44,7 +44,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
     }, { week, library });
 }
@@ -57,7 +57,7 @@ test('each day column shows meal-type sections; cards live in their section', as
         libraryItem('lib-s1', 'Pasta', 'dinner'),
         libraryItem('lib-s2', 'Salad', 'lunch')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // All 4 sections render per day.
     await expect(page.locator('.day-column[data-date="' + MON + '"] .meal-section')).toHaveCount(4);
@@ -74,7 +74,7 @@ test('each day column shows meal-type sections; cards live in their section', as
 test('dragging a slot to a different meal-type section updates meal_type and persists', async ({ page }) => {
     await seed(page, [slotItem('s1', MON, 0, 'Pasta', 'dinner')],
         [libraryItem('lib-s1', 'Pasta', 'dinner')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const grab = page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-grab');
     const lunchSection = page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="lunch"]');
@@ -98,7 +98,7 @@ test('dragging a slot to a different meal-type section updates meal_type and per
 
     // Reload — change persists.
     await page.waitForTimeout(500);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(
         page.locator('.day-column[data-date="' + MON + '"] .meal-section[data-meal-type="lunch"] .slot-name')
     ).toHaveText('Pasta');

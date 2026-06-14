@@ -44,14 +44,14 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
     }, { week, library });
 }
 
 test('opening a slot reveals a delete action in the modal', async ({ page }) => {
     await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await page.locator('.day-column[data-date="' + MON + '"] .slot-card').click();
     await expect(page.locator('#recipe-dialog .dialog-delete')).toBeVisible();
 });
@@ -66,7 +66,7 @@ test('confirming delete in the modal removes the slot and persists across reload
         libraryItem('lib-s2', 'Salad'),
         libraryItem('lib-s3', 'Soup')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     page.on('dialog', d => d.accept());
     await page.locator('.day-column[data-date="' + MON + '"] .slot-card', { hasText: 'Pasta' }).click();
@@ -77,6 +77,6 @@ test('confirming delete in the modal removes the slot and persists across reload
     await expect(page.locator('.day-column[data-date="' + TUE + '"] .slot-name')).toHaveText(['Soup']);
 
     await page.waitForTimeout(300);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-name')).toHaveText(['Salad']);
 });

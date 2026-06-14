@@ -50,8 +50,7 @@ test.beforeEach(async ({ page }) => {
             SUPABASE_URL: null,
             SUPABASE_PUBLISHABLE_KEY: null,
             APP_TITLE: 'Listlet Meals',
-            DB_TABLE: 'listlet_meals',
-            DEFAULT_LIST_NAME: 'week'
+            DB_TABLE: 'listlet_meals'
         };
     });
 });
@@ -60,7 +59,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
     }, { week, library });
 }
@@ -118,7 +117,7 @@ async function touchDrag(page, fromSelector, toSelector, opts) {
 
 test('touch-drag from the grab handle moves a slot from Mon to Wed and persists', async ({ page }) => {
     await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await touchDrag(page,
         '.day-column[data-date="' + MON + '"] .slot-card',
@@ -128,13 +127,13 @@ test('touch-drag from the grab handle moves a slot from Mon to Wed and persists'
     await expect(page.locator('.day-column[data-date="' + MON + '"] .slot-card')).toHaveCount(0);
 
     await page.waitForTimeout(400);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-name')).toHaveText(['Pasta']);
 });
 
 test('tapping the card body (not the handle) opens the recipe modal and does NOT move the slot', async ({ page }) => {
     await seed(page, [slotItem('s1', MON, 0, 'Pasta')], [libraryItem('lib-s1', 'Pasta')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // Tap the slot-name (card body), not the grab handle — should open the
     // recipe modal and leave the slot in Mon.

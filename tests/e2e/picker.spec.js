@@ -26,14 +26,14 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        if (week) localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        if (week) localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         if (library) localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, { week, library });
 }
 
 test('week view: each day column has an "Add meal" button', async ({ page }) => {
     await seed(page, [], [libraryItem('lib-a', 'Apple', 'eat it')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // One add button per day column.
     await expect(page.locator('.day-column .day-add')).toHaveCount(7);
@@ -45,7 +45,7 @@ test('week view: clicking add opens a picker listing library meals sorted by nam
         libraryItem('lib-a', 'Apple Pie', 'r2'),
         libraryItem('lib-c', 'cherry tart', 'r3')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
 
@@ -60,7 +60,7 @@ test('week view: picker groups meals by meal type with section headers', async (
         libraryItem('lib-ziti', 'Ziti', 'r2', 'dinner'),
         libraryItem('lib-steak', 'Apple Steak', 'r3', 'dinner')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
     const dialog = page.locator('#picker-dialog');
@@ -79,7 +79,7 @@ test('week view: a parent filter restricts the picker to that meal type', async 
         libraryItem('lib-ziti', 'Ziti', 'r2', 'dinner'),
         libraryItem('lib-salad', 'Salad', 'r3', 'lunch')
     ]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // Set the planner filter to Dinner, then open the picker.
     await page.locator('.filter-pill[data-filter="dinner"]').click();
@@ -92,7 +92,7 @@ test('week view: a parent filter restricts the picker to that meal type', async 
 
 test('week view: picking a meal adds a slot to the target day and persists', async ({ page }) => {
     await seed(page, [], [libraryItem('lib-pasta', 'Pasta', 'boil')]);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + THU + '"] .day-add').click();
     await page.locator('#picker-dialog .picker-meal', { hasText: 'Pasta' }).click();
@@ -103,7 +103,7 @@ test('week view: picking a meal adds a slot to the target day and persists', asy
 
     // Reload — slot still there.
     await page.waitForTimeout(300);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
     await expect(page.locator('.day-column[data-date="' + THU + '"] .slot-name')).toHaveText('Pasta');
 });
 
@@ -146,7 +146,7 @@ test('week view: slot card + day summary render live library macros and follow a
         [slotRow('s1', 'lib-p')],
         [libraryMealRow('lib-p', 'Pasta', { cal: 500, protein: 20 })]
     );
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const mon = page.locator('.day-column[data-date="' + MON + '"]');
     await expect(mon.locator('.slot-name')).toHaveText('Pasta');
@@ -164,7 +164,7 @@ test('week view: slot card + day summary render live library macros and follow a
         });
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(lib));
     });
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // Live join → the card and the summary show the NEW macros, no remove/re-add.
     await expect(mon.locator('.slot-macros')).toHaveText('800 cal • 35g P');
@@ -178,7 +178,7 @@ test('week view: a slot whose library meal is gone renders the (deleted meal) fa
         [slotRow('s1', 'lib-gone')],
         [libraryMealRow('lib-other', 'Other', { cal: 100 })]
     );
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const mon = page.locator('.day-column[data-date="' + MON + '"]');
     await expect(mon.locator('.slot-name')).toHaveText('(deleted meal)');

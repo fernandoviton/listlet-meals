@@ -1,4 +1,4 @@
-// Trends view (?view=trends over a planner list, default ?list=week). Read-only:
+// Trends view (?view=trends over a planner list named by ?list=). Read-only:
 // charts calories/protein per day and a weekly-averages table over a range of
 // weeks ending at the anchored week. DOM + render only; all aggregation goes
 // through MealsCore.

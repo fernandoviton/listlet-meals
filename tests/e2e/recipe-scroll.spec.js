@@ -55,8 +55,7 @@ test.beforeEach(async ({ page }) => {
             SUPABASE_URL: null,
             SUPABASE_PUBLISHABLE_KEY: null,
             APP_TITLE: 'Listlet Meals',
-            DB_TABLE: 'listlet_meals',
-            DEFAULT_LIST_NAME: 'week'
+            DB_TABLE: 'listlet_meals'
         };
     });
 });
@@ -65,7 +64,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
     }, { week, library });
 }
@@ -91,7 +90,7 @@ const LIBRARY = [
 test('wheel over the open recipe modal does not scroll the page behind it', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // Sanity: the document is actually scrollable.
     const scrollable = await page.evaluate(() =>
@@ -117,7 +116,7 @@ test('wheel over the open recipe modal does not scroll the page behind it', asyn
 test('the root is scroll-locked and the dialog body scrolls while the modal is open', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-name').click();
     await expect(page.locator('#recipe-dialog')).toHaveAttribute('open', '');

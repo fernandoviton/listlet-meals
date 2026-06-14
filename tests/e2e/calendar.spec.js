@@ -22,7 +22,7 @@ async function seedEmpty(page) {
 
 test('the week is anchored on the ?date= param (Sat→Fri headers)', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await expect(page.locator('.day-header .day-label')).toHaveText([
         'Sat 6/6', 'Sun 6/7', 'Mon 6/8', 'Tue 6/9', 'Wed 6/10', 'Thu 6/11', 'Fri 6/12'
@@ -32,7 +32,7 @@ test('the week is anchored on the ?date= param (Sat→Fri headers)', async ({ pa
 
 test('a mid-week date snaps to the Saturday-start week containing it', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=2026-06-10'); // Wednesday
+    await page.goto('/?list=planner&date=2026-06-10'); // Wednesday
 
     await expect(page.locator('.week-nav-label')).toHaveText('Week of Sat 6/6');
     await expect(page.locator('.day-column[data-date="2026-06-06"]')).toHaveCount(1);
@@ -40,7 +40,7 @@ test('a mid-week date snaps to the Saturday-start week containing it', async ({ 
 
 test('next / prev links move the anchor by a week', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.week-nav-arrow', { hasText: '›' }).click();
     await expect(page).toHaveURL(/date=2026-06-13/);
@@ -51,12 +51,12 @@ test('next / prev links move the anchor by a week', async ({ page }) => {
     await expect(page.locator('.week-nav-label')).toHaveText('Week of Sat 6/6');
 });
 
-test('the next arrow keeps the anchor (never collapses to a bare ?list=week) across reloads', async ({ page }) => {
+test('the next arrow keeps the anchor (never collapses to a bare ?list=planner) across reloads', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     // The arrow must always carry an explicit ?date= — i.e. it must NOT look like
-    // the Today link (bare ?list=week), which is the bug being guarded against.
+    // the Today link (bare ?list=planner), which is the bug being guarded against.
     const next = page.locator('.week-nav-arrow', { hasText: '›' });
     await expect(next).toHaveAttribute('href', /date=2026-06-13/);
 
@@ -69,19 +69,19 @@ test('the next arrow keeps the anchor (never collapses to a bare ?list=week) acr
     await expect(page.locator('.day-column').first()).toHaveAttribute('data-date', '2026-06-20');
 });
 
-test('the Today link — and only it — collapses to a bare ?list=week', async ({ page }) => {
+test('the Today link — and only it — collapses to a bare ?list=planner', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
-    await expect(page.locator('.week-nav-today')).toHaveAttribute('href', '?list=week');
+    await expect(page.locator('.week-nav-today')).toHaveAttribute('href', '?list=planner');
     // The arrows must not share the Today link's bare href.
-    await expect(page.locator('.week-nav-arrow', { hasText: '›' })).not.toHaveAttribute('href', '?list=week');
-    await expect(page.locator('.week-nav-arrow', { hasText: '‹' })).not.toHaveAttribute('href', '?list=week');
+    await expect(page.locator('.week-nav-arrow', { hasText: '›' })).not.toHaveAttribute('href', '?list=planner');
+    await expect(page.locator('.week-nav-arrow', { hasText: '‹' })).not.toHaveAttribute('href', '?list=planner');
 });
 
 test('the Today link drops the date param and highlights today', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     await page.locator('.week-nav-today').click();
 
@@ -98,25 +98,25 @@ test('the Today link drops the date param and highlights today', async ({ page }
 
 test('an off-week anchor shows no today highlight', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=2020-01-01'); // a long-past week, never "today"
+    await page.goto('/?list=planner&date=2020-01-01'); // a long-past week, never "today"
 
     await expect(page.locator('.day-column.today')).toHaveCount(0);
 });
 
 test('the planner links to the trends view', async ({ page }) => {
     await seedEmpty(page);
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const trends = page.locator('.week-nav-trends');
     await expect(trends).toBeVisible();
     await expect(trends).toHaveAttribute('href', /view=trends/);
 });
 
-test('nav links preserve the current list name (not hardcoded ?list=week)', async ({ page }) => {
+test('nav links preserve the current list name (never a hardcoded list)', async ({ page }) => {
     await seedEmpty(page);
-    // Open the planner under a NON-default list name. The nav links must point
-    // back at this same list — they currently hardcode ?list=week, which
-    // silently switches the user to a different list's data.
+    // Open the planner under an arbitrary list name. The nav links must point
+    // back at this same list — a hardcoded name would silently switch the user
+    // to a different list's data.
     await page.goto('/?list=groceries&date=' + SAT);
 
     await expect(page.locator('.week-nav-arrow', { hasText: '‹' })).toHaveAttribute('href', /list=groceries/);

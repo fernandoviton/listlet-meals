@@ -1,6 +1,6 @@
 const { test, expect } = require('./fixtures');
 
-// Trends is a read-only view (?list=week&view=trends) over the dated week list.
+// Trends is a read-only view (?list=planner&view=trends) over the dated week list.
 // Anchor 2026-06-06 (Sat) so ranges are deterministic: the range ends at the
 // anchored week's Friday and extends `range` Saturdays back.
 
@@ -35,7 +35,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, { week, library });
 }
@@ -53,7 +53,7 @@ const LIBRARY = [
 
 test('trends table shows weekly averages over days logged', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
 
     // Two week rows in range.
     await expect(page.locator('.trends-row')).toHaveCount(2);
@@ -67,7 +67,7 @@ test('trends table shows weekly averages over days logged', async ({ page }) => 
 
 test('trends renders a bar for a seeded date', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
 
     await expect(page.locator('.trends-chart')).toHaveCount(2); // cal + protein
     await expect(page.locator('.trends-bar[data-date="2026-06-06"]').first()).toBeVisible();
@@ -75,7 +75,7 @@ test('trends renders a bar for a seeded date', async ({ page }) => {
 
 test('day-axis tick labels are HTML, not text inside the stretched SVG', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
 
     // The bar SVG fills width via preserveAspectRatio="none", so any <text> inside
     // it is stretched horizontally with it (digits visibly spread apart). Tick
@@ -90,7 +90,7 @@ test('day-axis tick labels are HTML, not text inside the stretched SVG', async (
 
 test('range pills navigate and change the number of weeks shown', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
     await expect(page.locator('.trends-row')).toHaveCount(2);
 
     await page.locator('.trends-pill[data-range="12"]').click();
@@ -100,7 +100,7 @@ test('range pills navigate and change the number of weeks shown', async ({ page 
 
 test('a back link returns to the planner at the same anchor', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
 
     const back = page.locator('.trends-back');
     await expect(back).toBeVisible();
@@ -108,8 +108,8 @@ test('a back link returns to the planner at the same anchor', async ({ page }) =
     await expect(back).not.toHaveAttribute('href', /view=trends/);
 });
 
-test('trends nav links preserve the current list name (not hardcoded ?list=week)', async ({ page }) => {
-    // Seed the week list under a NON-default list name and open trends on it.
+test('trends nav links preserve the current list name (never a hardcoded list)', async ({ page }) => {
+    // Seed a calendar under an arbitrary list name and open trends on it.
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
@@ -118,7 +118,7 @@ test('trends nav links preserve the current list name (not hardcoded ?list=week)
     }, { week: WEEK, library: LIBRARY });
     await page.goto('/?list=groceries&view=trends&date=' + ANCHOR + '&range=2');
 
-    // Back-to-planner and range pills must stay on ?list=groceries, not snap to week.
+    // Back-to-planner and range pills must stay on ?list=groceries, not snap to another list.
     await expect(page.locator('.trends-back')).toHaveAttribute('href', /list=groceries/);
     await expect(page.locator('.trends-pill[data-range="12"]')).toHaveAttribute('href', /list=groceries/);
 });

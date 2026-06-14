@@ -44,7 +44,7 @@ test('filter pills narrow visible slots and shrink daily totals', async ({ page 
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, {
         week: [
@@ -59,7 +59,7 @@ test('filter pills narrow visible slots and shrink daily totals', async ({ page 
         ]
     });
 
-    await page.goto('/?list=week&date=' + SAT);
+    await page.goto('/?list=planner&date=' + SAT);
 
     const mon = page.locator('.day-column[data-date="' + MON + '"]');
     await expect(mon.locator('.slot-card')).toHaveCount(3);
