@@ -127,16 +127,23 @@ body::before {
 .week-nav {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    justify-content: space-between;
+    gap: 1.5rem;
     margin: 0 0 1rem;
     flex-wrap: wrap;
+}
+/* Group Today/Trends apart from the ‹ label › cluster so the next arrow and
+   the Today link (which drops ?date=) aren't easy to mistake for each other. */
+.week-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
 }
 .week-nav-label {
     font-family: var(--serif);
     font-style: italic;
     font-size: 1.15rem;
     color: var(--ink);
-    margin-right: auto;
 }
 .week-nav a {
     text-decoration: none;
