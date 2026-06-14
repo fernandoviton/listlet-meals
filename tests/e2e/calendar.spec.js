@@ -111,3 +111,16 @@ test('the planner links to the trends view', async ({ page }) => {
     await expect(trends).toBeVisible();
     await expect(trends).toHaveAttribute('href', /view=trends/);
 });
+
+test('nav links preserve the current list name (not hardcoded ?list=week)', async ({ page }) => {
+    await seedEmpty(page);
+    // Open the planner under a NON-default list name. The nav links must point
+    // back at this same list — they currently hardcode ?list=week, which
+    // silently switches the user to a different list's data.
+    await page.goto('/?list=groceries&date=' + SAT);
+
+    await expect(page.locator('.week-nav-arrow', { hasText: '‹' })).toHaveAttribute('href', /list=groceries/);
+    await expect(page.locator('.week-nav-arrow', { hasText: '›' })).toHaveAttribute('href', /list=groceries/);
+    await expect(page.locator('.week-nav-today')).toHaveAttribute('href', /list=groceries/);
+    await expect(page.locator('.week-nav-trends')).toHaveAttribute('href', /list=groceries/);
+});

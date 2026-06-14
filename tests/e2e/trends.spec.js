@@ -107,3 +107,18 @@ test('a back link returns to the planner at the same anchor', async ({ page }) =
     await expect(back).toHaveAttribute('href', /date=2026-06-06/);
     await expect(back).not.toHaveAttribute('href', /view=trends/);
 });
+
+test('trends nav links preserve the current list name (not hardcoded ?list=week)', async ({ page }) => {
+    // Seed the week list under a NON-default list name and open trends on it.
+    await page.goto('/');
+    await page.evaluate(({ week, library }) => {
+        localStorage.clear();
+        localStorage.setItem('listlet_listlet_meals_groceries', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
+    }, { week: WEEK, library: LIBRARY });
+    await page.goto('/?list=groceries&view=trends&date=' + ANCHOR + '&range=2');
+
+    // Back-to-planner and range pills must stay on ?list=groceries, not snap to week.
+    await expect(page.locator('.trends-back')).toHaveAttribute('href', /list=groceries/);
+    await expect(page.locator('.trends-pill[data-range="12"]')).toHaveAttribute('href', /list=groceries/);
+});

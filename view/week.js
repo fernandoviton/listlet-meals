@@ -179,19 +179,23 @@ var WeekView = (function() {
         var prev = MealsCore.addDays(weekOf, -7);
         var next = MealsCore.addDays(weekOf, 7);
         var label = 'Week of ' + ViewUtils.formatDayLabel(weekOf);
+        // Every nav link must carry the *current* list, not a hardcoded 'week':
+        // the planner can be opened under any ?list= name and these links must
+        // stay on it rather than silently switching to the default list's data.
+        var list = '?list=' + encodeURIComponent(api.listName);
         // Two explicit groups so the ‹ label › cluster stays visually distinct
         // from Today/Trends — even if the stylesheet is stale-cached, the grouping
         // markup keeps the next arrow from sitting flush against Today (which
         // drops ?date= and jumps to the current week).
         return '<div class="week-nav">' +
             '<div class="week-nav-group week-nav-steps">' +
-                '<a class="week-nav-arrow" href="?list=week&date=' + prev + '" aria-label="Previous week">‹</a>' +
+                '<a class="week-nav-arrow" href="' + list + '&date=' + prev + '" aria-label="Previous week">‹</a>' +
                 '<span class="week-nav-label">' + escapeHtml(label) + '</span>' +
-                '<a class="week-nav-arrow" href="?list=week&date=' + next + '" aria-label="Next week">›</a>' +
+                '<a class="week-nav-arrow" href="' + list + '&date=' + next + '" aria-label="Next week">›</a>' +
             '</div>' +
             '<div class="week-nav-group week-nav-jump">' +
-                '<a class="week-nav-today" href="?list=week">Today</a>' +
-                '<a class="week-nav-trends" href="?list=week&view=trends&date=' + weekOf + '">Trends</a>' +
+                '<a class="week-nav-today" href="' + list + '">Today</a>' +
+                '<a class="week-nav-trends" href="' + list + '&view=trends&date=' + weekOf + '">Trends</a>' +
             '</div>' +
             '</div>';
     }

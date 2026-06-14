@@ -70,14 +70,17 @@ var TrendsView = (function() {
 
     function renderHeader() {
         var label = ViewUtils.formatDayLabel(weekOf);
+        // Carry the current list, not a hardcoded 'week' — these links must keep
+        // the user on whatever ?list= the trends view was opened under.
+        var list = '?list=' + encodeURIComponent(api.listName);
         var html = '<div class="trends-header">';
-        html += '<a class="trends-back" href="?list=week&date=' + weekOf + '">‹ Planner</a>';
+        html += '<a class="trends-back" href="' + list + '&date=' + weekOf + '">‹ Planner</a>';
         html += '<span class="trends-title">Trends — ' + range + ' weeks to ' + escapeHtml(label) + '</span>';
         html += '<span class="trends-range">';
         for (var i = 0; i < RANGES.length; i++) {
             var r = RANGES[i];
             var cls = 'trends-pill' + (r === range ? ' active' : '');
-            html += '<a class="' + cls + '" data-range="' + r + '" href="?list=week&view=trends&date=' +
+            html += '<a class="' + cls + '" data-range="' + r + '" href="' + list + '&view=trends&date=' +
                 weekOf + '&range=' + r + '">' + r + 'w</a>';
         }
         html += '</span>';
