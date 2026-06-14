@@ -1,6 +1,9 @@
 const { test, expect } = require('./fixtures');
 
-function slotItem(id, day, order, name, meal_type, macros) {
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+
+function slotItem(id, date, order, name, meal_type, macros) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -8,7 +11,7 @@ function slotItem(id, day, order, name, meal_type, macros) {
         content: JSON.stringify({
             kind: 'slot',
             library_id: 'lib-' + id,
-            day: day,
+            date: date,
             meal_type: meal_type,
             order: order
         }),
@@ -41,13 +44,13 @@ test('filter pills narrow visible slots and shrink daily totals', async ({ page 
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library));
     }, {
         week: [
-            slotItem('s1', 'mon', 0, 'Oatmeal', 'breakfast'),
-            slotItem('s2', 'mon', 1, 'Salad',   'lunch'),
-            slotItem('s3', 'mon', 2, 'Pasta',   'dinner')
+            slotItem('s1', MON, 0, 'Oatmeal', 'breakfast'),
+            slotItem('s2', MON, 1, 'Salad',   'lunch'),
+            slotItem('s3', MON, 2, 'Pasta',   'dinner')
         ],
         library: [
             libraryItem('lib-s1', 'Oatmeal', 'breakfast', { cal: 300, protein: 10 }),
@@ -56,9 +59,9 @@ test('filter pills narrow visible slots and shrink daily totals', async ({ page 
         ]
     });
 
-    await page.goto('/?list=week');
+    await page.goto('/?list=planner&date=' + SAT);
 
-    const mon = page.locator('.day-column[data-day="mon"]');
+    const mon = page.locator('.day-column[data-date="' + MON + '"]');
     await expect(mon.locator('.slot-card')).toHaveCount(3);
     await expect(mon.locator('.day-summary')).toHaveText('1400 cal • 55g P');
 

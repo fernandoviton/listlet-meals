@@ -1,12 +1,9 @@
-// Week view (the planner). Renders ?list=week. DOM + event wiring only.
+// Week view (the planner). Renders any non-library ?list= as a
+// real, dated Saturday-start week anchored by ?date=YYYY-MM-DD (default: today).
+// DOM + event wiring only.
 // All state transformations go through MealsCore; presentation helpers live in ViewUtils.
 
 var WeekView = (function() {
-    var DAYS = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
-    var DAY_LABELS = {
-        sat: 'Sat', sun: 'Sun', mon: 'Mon', tue: 'Tue',
-        wed: 'Wed', thu: 'Thu', fri: 'Fri'
-    };
     var MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
     var MEAL_TYPE_LABELS = {
         breakfast: 'Breakfast',
@@ -27,6 +24,11 @@ var WeekView = (function() {
     var currentFilter = 'all';
     var saveTimer = null;
 
+    // The Saturday anchoring the rendered week. Resolved once in init() from
+    // ?date= (validated) or today's local date, then snapped to its week start.
+    // Module state, so a Sync-triggered re-render keeps the same week.
+    var weekOf = null;
+
     var dragState = null;
     var suppressNextClick = false;
 
@@ -34,12 +36,28 @@ var WeekView = (function() {
         container = el;
         api = listApi;
 
+        weekOf = resolveWeekOf();
+
         Sync.init(api, function(fresh) {
             items = fresh || [];
             render();
         });
 
         loadAndRender();
+    }
+
+    // ?date= → the Saturday on/before it; an absent/invalid param falls back to
+    // the local "today". Never parses 'YYYY-MM-DD' as a local Date (would drift
+    // by a day in negative-UTC zones).
+    function resolveWeekOf() {
+        var params = new URLSearchParams(window.location.search);
+        var d = params.get('date');
+        var anchor = (d && MealsCore.isIsoDate(d)) ? d : ViewUtils.localIsoDate(new Date());
+        return MealsCore.weekStart(anchor);
+    }
+
+    function todayIso() {
+        return ViewUtils.localIsoDate(new Date());
     }
 
     async function loadAndRender() {
@@ -69,11 +87,13 @@ var WeekView = (function() {
         return {};
     }
 
+    // Keep only slots carrying a valid ISO date — the dated shape is the slot
+    // shape, so anything else simply doesn't render (no legacy fallback).
     function parseSlots() {
         var slots = [];
         for (var i = 0; i < items.length; i++) {
             var parsed = MealsCore.parseContent(items[i].content);
-            if (parsed && parsed.kind === 'slot') {
+            if (parsed && parsed.kind === 'slot' && MealsCore.isIsoDate(parsed.date)) {
                 parsed.id = items[i].id;
                 slots.push(parsed);
             }
@@ -90,18 +110,23 @@ var WeekView = (function() {
         var allSlots = parseSlots();
         var slots = MealsCore.filterSlotsByType(allSlots, currentFilter);
         var mealTypes = visibleMealTypes();
+        var dates = MealsCore.weekDates(weekOf);
+        var today = todayIso();
 
         var html = '<div class="planner">';
+        html += renderNav();
         html += renderFilterBar();
         html += '<div class="week-grid">';
-        for (var d = 0; d < DAYS.length; d++) {
-            var day = DAYS[d];
-            var daySlots = slots.filter(function(s) { return s.day === day; });
+        for (var d = 0; d < dates.length; d++) {
+            var date = dates[d];
+            var daySlots = slots.filter(function(s) { return s.date === date; });
+            var dayLabel = ViewUtils.formatDayLabel(date);
+            var isToday = date === today;
 
-            html += '<div class="day-column" data-day="' + day + '">';
+            html += '<div class="day-column' + (isToday ? ' today' : '') + '" data-date="' + date + '">';
             html += '<div class="day-header">' +
-                '<span class="day-label">' + DAY_LABELS[day] + '</span>' +
-                '<button type="button" class="day-add" data-day="' + day + '" title="Add meal" aria-label="Add meal to ' + DAY_LABELS[day] + '">+</button>' +
+                '<span class="day-label">' + escapeHtml(dayLabel) + '</span>' +
+                '<button type="button" class="day-add" data-date="' + date + '" title="Add meal" aria-label="Add meal to ' + escapeHtml(dayLabel) + '">+</button>' +
                 '</div>';
 
             html += '<div class="day-sections">';
@@ -111,7 +136,7 @@ var WeekView = (function() {
                     .filter(function(s) { return s.meal_type === mt; })
                     .sort(function(a, b) { return a.order - b.order; });
 
-                html += '<div class="meal-section" data-day="' + day + '" data-meal-type="' + mt + '">';
+                html += '<div class="meal-section" data-date="' + date + '" data-meal-type="' + mt + '">';
                 html += '<div class="section-label">' + MEAL_TYPE_LABELS[mt] + '</div>';
                 html += '<div class="section-slots">';
                 for (var i = 0; i < sectionSlots.length; i++) {
@@ -122,7 +147,7 @@ var WeekView = (function() {
             }
             html += '</div>';
 
-            html += '<div class="day-summary" data-day="' + day + '">' +
+            html += '<div class="day-summary" data-date="' + date + '">' +
                 renderSummary(MealsCore.summarizeMacros(daySlots, libraryById)) + '</div>';
             html += '</div>';
         }
@@ -147,12 +172,42 @@ var WeekView = (function() {
         bindDialogEvents();
     }
 
+    /* ===== Week navigation ===== */
+
+    // Plain links (full reload, consistent with the rest of the app). Prev/next
+    // rewrite ?date=; Today drops the param; Trends switches the view.
+    function renderNav() {
+        var prev = MealsCore.addDays(weekOf, -7);
+        var next = MealsCore.addDays(weekOf, 7);
+        var label = 'Week of ' + ViewUtils.formatDayLabel(weekOf);
+        // Every nav link must carry the *current* list, not a hardcoded 'week':
+        // the planner can be opened under any ?list= name and these links must
+        // stay on it rather than silently switching to the default list's data.
+        var list = '?list=' + encodeURIComponent(api.listName);
+        // Two explicit groups so the ‹ label › cluster stays visually distinct
+        // from Today/Trends — even if the stylesheet is stale-cached, the grouping
+        // markup keeps the next arrow from sitting flush against Today (which
+        // drops ?date= and jumps to the current week).
+        return '<div class="week-nav">' +
+            '<div class="week-nav-group week-nav-steps">' +
+                '<a class="week-nav-arrow" href="' + list + '&date=' + prev + '" aria-label="Previous week">‹</a>' +
+                '<span class="week-nav-label">' + escapeHtml(label) + '</span>' +
+                '<a class="week-nav-arrow" href="' + list + '&date=' + next + '" aria-label="Next week">›</a>' +
+            '</div>' +
+            '<div class="week-nav-group week-nav-jump">' +
+                '<a class="week-nav-today" href="' + list + '">Today</a>' +
+                '<a class="week-nav-trends" href="' + list + '&view=trends&date=' + weekOf + '">Trends</a>' +
+            '</div>' +
+            '</div>';
+    }
+
     /* ===== Pointer (drag from handle) + click (open modal) ===== */
 
     function bindCardEvents() {
         var cards = container.querySelectorAll('.slot-card');
         for (var i = 0; i < cards.length; i++) {
             cards[i].addEventListener('click', onCardClick);
+            cards[i].addEventListener('keydown', onCardKeydown);
             var grab = cards[i].querySelector('.slot-grab');
             if (grab) grab.addEventListener('pointerdown', onGrabPointerDown);
         }
@@ -161,7 +216,19 @@ var WeekView = (function() {
     function onCardClick(e) {
         if (e.target.closest('.slot-grab')) return;
         if (suppressNextClick) { suppressNextClick = false; return; }
-        var card = e.currentTarget;
+        openCardModal(e.currentTarget);
+    }
+
+    // The card is role="button" tabindex="0", so Enter/Space must open the same
+    // modal a click does (matches the library card's keyboard affordance).
+    function onCardKeydown(e) {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        if (e.target.closest('.slot-grab')) return;
+        e.preventDefault();
+        openCardModal(e.currentTarget);
+    }
+
+    function openCardModal(card) {
         openRecipeModal(card.dataset.id, card.dataset.libraryId,
             card.querySelector('.slot-name').textContent);
     }
@@ -250,7 +317,7 @@ var WeekView = (function() {
         suppressNextClick = true;
         cleanupDrag();
         if (!section) return;
-        commitMove(movedId, section.dataset.day, section.dataset.mealType);
+        commitMove(movedId, section.dataset.date, section.dataset.mealType);
     }
 
     function onWindowPointerCancel(e) {
@@ -273,19 +340,19 @@ var WeekView = (function() {
         window.removeEventListener('pointercancel', onWindowPointerCancel);
     }
 
-    function commitMove(id, toDay, toMealType) {
+    function commitMove(id, toDate, toMealType) {
         var slotsArr = parseSlots();
         var before = JSON.parse(JSON.stringify(slotsArr));
         var toIndex = slotsArr.filter(function(s) {
-            return s.day === toDay && s.meal_type === toMealType && s.id !== id;
+            return s.date === toDate && s.meal_type === toMealType && s.id !== id;
         }).length;
-        var moved = MealsCore.moveSlot(slotsArr, id, toDay, toMealType, toIndex);
+        var moved = MealsCore.moveSlot(slotsArr, id, toDate, toMealType, toIndex);
 
         var beforeById = {};
         before.forEach(function(s) { beforeById[s.id] = s; });
         var changed = moved.filter(function(s) {
             var b = beforeById[s.id];
-            return !b || b.day !== s.day || b.meal_type !== s.meal_type || b.order !== s.order;
+            return !b || b.date !== s.date || b.meal_type !== s.meal_type || b.order !== s.order;
         });
 
         for (var k = 0; k < items.length; k++) {
@@ -293,7 +360,7 @@ var WeekView = (function() {
             if (!slot || slot.kind !== 'slot') continue;
             for (var m = 0; m < moved.length; m++) {
                 if (moved[m].id === items[k].id) {
-                    slot.day = moved[m].day;
+                    slot.date = moved[m].date;
                     slot.meal_type = moved[m].meal_type;
                     slot.order = moved[m].order;
                     items[k].content = MealsCore.serialize(slot);
@@ -361,11 +428,11 @@ var WeekView = (function() {
     }
 
     async function onOpenPicker(e) {
-        var day = e.currentTarget.dataset.day;
+        var date = e.currentTarget.dataset.date;
         var dialog = document.getElementById('picker-dialog');
         var bodyEl = dialog.querySelector('.picker-body');
-        dialog.querySelector('.picker-day').textContent = DAY_LABELS[day] || day;
-        dialog.dataset.day = day;
+        dialog.querySelector('.picker-day').textContent = ViewUtils.formatDayLabel(date);
+        dialog.dataset.date = date;
         bodyEl.innerHTML = '<div class="picker-loading">Loading…</div>';
         if (typeof dialog.showModal === 'function') dialog.showModal();
 
@@ -376,10 +443,10 @@ var WeekView = (function() {
             bodyEl.innerHTML = '<div class="picker-empty">Failed to load library.</div>';
             return;
         }
-        renderPickerList(bodyEl, day);
+        renderPickerList(bodyEl, date);
     }
 
-    function renderPickerList(bodyEl, day) {
+    function renderPickerList(bodyEl, date) {
         // Quick add comes first so it stays available when the library is
         // empty or the active filter leaves nothing to pick.
         var html = '<button type="button" class="picker-quick-add">+ Quick add</button>';
@@ -403,7 +470,7 @@ var WeekView = (function() {
         }
         bodyEl.innerHTML = html;
         bodyEl.querySelector('.picker-quick-add').addEventListener('click', function() {
-            renderQuickAddForm(bodyEl, day);
+            renderQuickAddForm(bodyEl, date);
         });
         var btns = bodyEl.querySelectorAll('.picker-meal');
         for (var j = 0; j < btns.length; j++) {
@@ -411,7 +478,8 @@ var WeekView = (function() {
         }
     }
 
-    function renderQuickAddForm(bodyEl, day) {
+    function renderQuickAddForm(bodyEl, date) {
+        var dayLabel = ViewUtils.formatDayLabel(date);
         var preType = currentFilter !== 'all' ? currentFilter : 'dinner';
         var html = '<form class="quick-add-form" novalidate>';
         html += '<label class="quick-add-label">Name' +
@@ -435,25 +503,26 @@ var WeekView = (function() {
         html += '<div class="quick-add-error" hidden></div>';
         html += '<div class="quick-add-actions">' +
             '<button type="button" class="quick-add-back">Back</button>' +
-            '<button type="submit" class="quick-add-submit">Add to ' + escapeHtml(DAY_LABELS[day] || day) + '</button>' +
+            '<button type="submit" class="quick-add-submit">Add to ' + escapeHtml(dayLabel) + '</button>' +
             '</div>';
         html += '</form>';
         bodyEl.innerHTML = html;
 
         var form = bodyEl.querySelector('.quick-add-form');
-        form.addEventListener('submit', function(e) { onQuickAddSubmit(e, day); });
+        form.addEventListener('submit', function(e) { onQuickAddSubmit(e, date); });
         bodyEl.querySelector('.quick-add-back').addEventListener('click', function() {
-            renderPickerList(bodyEl, day);
+            renderPickerList(bodyEl, date);
         });
         form.querySelector('input[name="name"]').focus();
     }
 
-    async function onQuickAddSubmit(e, day) {
+    async function onQuickAddSubmit(e, date) {
         e.preventDefault();
         var form = e.currentTarget;
         var dialog = document.getElementById('picker-dialog');
         var errEl = form.querySelector('.quick-add-error');
         var submitBtn = form.querySelector('.quick-add-submit');
+        var dayLabel = ViewUtils.formatDayLabel(date);
 
         function fail(msg) {
             errEl.textContent = msg;
@@ -491,7 +560,7 @@ var WeekView = (function() {
         if (libraryCache) libraryCache.push(created);
         libraryById[created.id] = meal;
 
-        var result = MealsCore.addSlot(items, created, day);
+        var result = MealsCore.addSlot(items, created, date);
         try {
             await api.createItem({ content: result.newSlotContent });
         } catch (err) {
@@ -502,7 +571,7 @@ var WeekView = (function() {
                 libraryCache = libraryCache.filter(function(r) { return r.id !== created.id; });
             }
             delete libraryById[created.id];
-            fail('Could not add to ' + (DAY_LABELS[day] || day) + '.');
+            fail('Could not add to ' + dayLabel + '.');
             return;
         }
 
@@ -517,7 +586,7 @@ var WeekView = (function() {
         var btn = e.currentTarget;
         var libraryItemId = btn.dataset.id;
         var dialog = document.getElementById('picker-dialog');
-        var day = dialog.dataset.day;
+        var date = dialog.dataset.date;
         var libraryItem = null;
         if (libraryCache) {
             for (var i = 0; i < libraryCache.length; i++) {
@@ -526,7 +595,7 @@ var WeekView = (function() {
         }
         if (!libraryItem) { dialog.close(); return; }
 
-        var result = MealsCore.addSlot(items, libraryItem, day);
+        var result = MealsCore.addSlot(items, libraryItem, date);
         dialog.close();
         try {
             await api.createItem({ content: result.newSlotContent });

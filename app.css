@@ -122,6 +122,45 @@ body::before {
     box-shadow: inset 0 0 0 1px var(--ink), 0 6px 16px -8px rgba(27,29,22,0.5);
 }
 
+/* ---------- Week navigation ---------- */
+
+.week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin: 0 0 1rem;
+    flex-wrap: wrap;
+}
+/* Group Today/Trends apart from the ‹ label › cluster so the next arrow and
+   the Today link (which drops ?date=) aren't easy to mistake for each other. */
+.week-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.week-nav-label {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--ink);
+}
+.week-nav a {
+    text-decoration: none;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    background: var(--paper);
+    transition: color .18s ease, background .18s ease;
+}
+.week-nav a:hover { color: var(--ink); background: var(--bg-tint); }
+.week-nav-arrow { line-height: 1; }
+.week-nav-trends { color: var(--olive); }
+
 /* ---------- Week grid ---------- */
 
 .week-grid {
@@ -151,6 +190,11 @@ body::before {
     background: linear-gradient(90deg, var(--tomato), var(--mustard) 60%, var(--olive));
     opacity: 0.55;
 }
+.day-column.today {
+    border-color: var(--tomato);
+    box-shadow: var(--shadow-1), 0 0 0 1px var(--tomato);
+}
+.day-column.today::before { opacity: 1; }
 
 .day-header {
     display: flex;
@@ -268,6 +312,130 @@ body::before {
     text-transform: lowercase;
     min-height: 1.5em;
 }
+
+/* ---------- Trends view ---------- */
+
+.trends {
+    padding: clamp(0.75rem, 2.5vw, 2rem);
+    max-width: 1100px;
+    margin: 0 auto;
+}
+.trends-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.trends-title {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--ink);
+    margin-right: auto;
+}
+.trends-header a {
+    text-decoration: none;
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    background: var(--paper);
+    transition: color .18s ease, background .18s ease;
+}
+.trends-header a:hover { color: var(--ink); background: var(--bg-tint); }
+.trends-range { display: inline-flex; gap: 0.4rem; }
+.trends-pill.active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+
+.trends-section {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 0.9rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-1);
+}
+.trends-section-title {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ink-2);
+    margin-bottom: 0.6rem;
+}
+.trends-plot {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+.trends-chart-wrap { flex: 1; min-width: 0; }
+/* Y-axis scale lives in HTML (not the non-uniformly scaled SVG), matching the
+   chart's 140px height so labels line up with top / middle / baseline. */
+.trends-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px;
+    text-align: right;
+    min-width: 2.2rem;
+}
+.trends-ylabel {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--ink-2);
+}
+.trends-chart {
+    display: block;
+    width: 100%;
+    height: 140px;
+    overflow: visible;
+}
+.trends-bar { fill: var(--tomato); opacity: 0.85; }
+/* Day-axis labels live in HTML (not in the non-uniformly scaled SVG) so their
+   glyphs never stretch. Each is absolutely positioned at its bar's center %. */
+.trends-axis {
+    position: relative;
+    height: 1rem;
+    margin-top: 0.2rem;
+}
+.trends-tick {
+    position: absolute;
+    transform: translateX(-50%);
+    color: var(--ink-2);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.trends-caption {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    color: var(--ink-2);
+    margin-bottom: 0.6rem;
+}
+.trends-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+}
+.trends-table th, .trends-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: right;
+    border-bottom: 1px solid var(--line-soft);
+}
+.trends-table th:first-child, .trends-table td:first-child { text-align: left; }
+.trends-table th {
+    background: var(--paper-2);
+    color: var(--ink-2);
+    font-weight: 600;
+}
+.trends-table tbody tr:last-child td { border-bottom: none; }
+.trends-table .tcell-week { font-weight: 600; color: var(--ink); }
 
 /* ---------- Slot card (tap to open, drag handle to move) ---------- */
 

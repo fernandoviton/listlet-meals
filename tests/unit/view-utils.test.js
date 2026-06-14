@@ -53,6 +53,24 @@ describe('ViewUtils.formatQuantity', () => {
     });
 });
 
+describe('ViewUtils.formatDayLabel', () => {
+    test('renders weekday + M/D with no leading zeros', () => {
+        expect(ViewUtils.formatDayLabel('2026-06-06')).toBe('Sat 6/6');
+        expect(ViewUtils.formatDayLabel('2026-06-13')).toBe('Sat 6/13');
+        expect(ViewUtils.formatDayLabel('2026-06-08')).toBe('Mon 6/8');
+        expect(ViewUtils.formatDayLabel('2026-12-31')).toBe('Thu 12/31');
+    });
+});
+
+describe('ViewUtils.localIsoDate', () => {
+    test('formats a Date as YYYY-MM-DD from its local components', () => {
+        // Construct via local-component args so the test is timezone-agnostic.
+        expect(ViewUtils.localIsoDate(new Date(2026, 5, 6))).toBe('2026-06-06');
+        expect(ViewUtils.localIsoDate(new Date(2026, 11, 31))).toBe('2026-12-31');
+        expect(ViewUtils.localIsoDate(new Date(2026, 0, 1))).toBe('2026-01-01');
+    });
+});
+
 describe('ViewUtils.renderRecipeHtml', () => {
     const recipe = {
         ingredients: [

@@ -6,7 +6,14 @@ const { test, expect } = require('@playwright/test');
 // is enforced via CSS (html:has(dialog[open]) { overflow: hidden }) plus an
 // internal scroll region on the dialog body.
 
-function slotItem(id, day, order, name) {
+const SAT = '2026-06-06';
+const MON = '2026-06-08';
+const TUE = '2026-06-09';
+const WED = '2026-06-10';
+const THU = '2026-06-11';
+const FRI = '2026-06-12';
+
+function slotItem(id, date, order, name) {
     const now = new Date().toISOString();
     return {
         id: id,
@@ -14,7 +21,7 @@ function slotItem(id, day, order, name) {
         content: JSON.stringify({
             kind: 'slot',
             library_id: 'lib-' + id,
-            day: day,
+            date: date,
             meal_type: 'lunch',
             order: order
         }),
@@ -48,8 +55,7 @@ test.beforeEach(async ({ page }) => {
             SUPABASE_URL: null,
             SUPABASE_PUBLISHABLE_KEY: null,
             APP_TITLE: 'Listlet Meals',
-            DB_TABLE: 'listlet_meals',
-            DEFAULT_LIST_NAME: 'week'
+            DB_TABLE: 'listlet_meals'
         };
     });
 });
@@ -58,7 +64,7 @@ async function seed(page, week, library) {
     await page.goto('/');
     await page.evaluate(({ week, library }) => {
         localStorage.clear();
-        localStorage.setItem('listlet_listlet_meals_week', JSON.stringify(week));
+        localStorage.setItem('listlet_listlet_meals_planner', JSON.stringify(week));
         localStorage.setItem('listlet_listlet_meals_library', JSON.stringify(library || []));
     }, { week, library });
 }
@@ -66,11 +72,11 @@ async function seed(page, week, library) {
 // A handful of slots across days + a short viewport so the document overflows
 // and window.scrollY can move if the background is not locked.
 const WEEK = [
-    slotItem('s1', 'mon', 0, 'Pasta'),
-    slotItem('s2', 'tue', 0, 'Soup'),
-    slotItem('s3', 'wed', 0, 'Salad'),
-    slotItem('s4', 'thu', 0, 'Wrap'),
-    slotItem('s5', 'fri', 0, 'Curry')
+    slotItem('s1', MON, 0, 'Pasta'),
+    slotItem('s2', TUE, 0, 'Soup'),
+    slotItem('s3', WED, 0, 'Salad'),
+    slotItem('s4', THU, 0, 'Wrap'),
+    slotItem('s5', FRI, 0, 'Curry')
 ];
 
 const LIBRARY = [
@@ -84,14 +90,14 @@ const LIBRARY = [
 test('wheel over the open recipe modal does not scroll the page behind it', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week');
+    await page.goto('/?list=planner&date=' + SAT);
 
     // Sanity: the document is actually scrollable.
     const scrollable = await page.evaluate(() =>
         document.documentElement.scrollHeight > window.innerHeight);
     expect(scrollable).toBe(true);
 
-    await page.locator('.day-column[data-day="mon"] .slot-card .slot-name').click();
+    await page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-name').click();
     const dialog = page.locator('#recipe-dialog');
     await expect(dialog).toHaveAttribute('open', '');
 
@@ -110,9 +116,9 @@ test('wheel over the open recipe modal does not scroll the page behind it', asyn
 test('the root is scroll-locked and the dialog body scrolls while the modal is open', async ({ page }) => {
     await page.setViewportSize({ width: 1000, height: 400 });
     await seed(page, WEEK, LIBRARY);
-    await page.goto('/?list=week');
+    await page.goto('/?list=planner&date=' + SAT);
 
-    await page.locator('.day-column[data-day="mon"] .slot-card .slot-name').click();
+    await page.locator('.day-column[data-date="' + MON + '"] .slot-card .slot-name').click();
     await expect(page.locator('#recipe-dialog')).toHaveAttribute('open', '');
 
     const styles = await page.evaluate(() => {
