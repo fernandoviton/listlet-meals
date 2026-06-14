@@ -1,6 +1,7 @@
-// Trends view (?list=week&view=trends). Read-only: charts calories/protein per
-// day and a weekly-averages table over a range of weeks ending at the anchored
-// week. DOM + render only; all aggregation goes through MealsCore.
+// Trends view (?view=trends over a planner list, default ?list=week). Read-only:
+// charts calories/protein per day and a weekly-averages table over a range of
+// weeks ending at the anchored week. DOM + render only; all aggregation goes
+// through MealsCore.
 
 var TrendsView = (function() {
     var RANGES = [2, 4, 12];

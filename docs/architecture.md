@@ -6,9 +6,9 @@ Living reference for how `listlet-meals` is wired together. Update on each commi
 
 A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter kit. Pages are selected by the `?list=` query parameter, with a `?view=` overlay:
 
-- `?list=library` — meal definitions (name, structured recipe, default meal type, macros).
-- `?list=week` — planned slots on a **real, dated** Saturday-start week. `?date=YYYY-MM-DD` anchors which week renders (default: today); prev/next nav rewrites it.
-- `?list=week&view=trends[&date=][&range=2|4|12]` — read-only trends (calories/protein per day + weekly averages).
+- `?list=library` — the one special list: meal definitions (name, structured recipe, default meal type, macros).
+- `?list=<calendar>` — any non-`library` name (default `week`) is an independent calendar of planned slots on a **real, dated** Saturday-start week. `?date=YYYY-MM-DD` anchors which week renders (default: today); prev/next nav rewrites it. All calendars are structurally identical — `week` is just the default name, not the only one.
+- `?list=<calendar>&view=trends[&date=][&range=2|4|12]` — read-only trends (calories/protein per day + weekly averages) for that calendar.
 
 `index.html` boots in this order: shared infra (`shared/*.js`) → `core/{content,dates,library,slots,macros}.js` → `meals-core.js` (facade) → `view/utils.js` → `view/library.js` → `view/week.js` → `view/trends.js` → `app.js` → `Auth.init` callback that renders `Header`, runs `App.ensureMockSeed`, then either `App.init` (when a list is in the URL) or `Home.render`. `App.init` reads `?view=`: `trends` → `TrendsView.init`; otherwise it dispatches to `LibraryView.init` or `WeekView.init` based on `listName`.
 
@@ -23,8 +23,8 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 ├──────────────────────────────────────────────────────────┤
 │ view/                                                    │
 │   library.js  — LibraryView: renders ?list=library       │
-│   week.js     — WeekView: renders ?list=week (dated      │
-│                 planner, drag-and-drop, picker, cards)   │
+│   week.js     — WeekView: any non-library ?list=         │
+│                 (dated planner, drag-and-drop, picker)   │
 │   trends.js   — TrendsView: ?view=trends (read-only      │
 │                 charts + weekly averages)                │
 │   utils.js    — ViewUtils: presentation helpers          │
@@ -87,13 +87,13 @@ recipe: {
 ```
 Quantities are plain decimals (fractions are a render concern). Macros are **per serving** (= per ×1 batch); the recipe modal's ×N stepper scales the ingredient display and the macro display (`macro × N`) at render time only — stored values never change.
 
-**Week item content** (`?list=week`):
+**Calendar item content** (any non-`library` `?list=`, default `week`):
 ```js
 { kind: "slot", library_id, date: "YYYY-MM-DD", meal_type, order }
 ```
 
 Notes:
-- A slot stores **no name/macros/recipe snapshot**. The week page fetches both lists on boot and renders as a **live join**: it builds a `{ [libraryRowId]: parsedMeal }` map (`MealsCore.indexLibrary`) and resolves each slot's name + macros from its library row by `library_id` (`MealsCore.resolveSlot`); expanding a slot fetches the same row's recipe. A library edit (e.g. via the CLI) therefore shows up on the next reload without remove/re-add — and **retroactively changes past day/week totals** (accepted). A slot whose library meal was **deleted** has no match, so it renders a `(deleted meal)` fallback and contributes 0 to totals.
+- A slot stores **no name/macros/recipe snapshot**. A calendar page fetches its own list plus the shared `library` on boot and renders as a **live join**: it builds a `{ [libraryRowId]: parsedMeal }` map (`MealsCore.indexLibrary`) and resolves each slot's name + macros from its library row by `library_id` (`MealsCore.resolveSlot`); expanding a slot fetches the same row's recipe. A library edit (e.g. via the CLI) therefore shows up on the next reload without remove/re-add — and **retroactively changes past day/week totals** (accepted). A slot whose library meal was **deleted** has no match, so it renders a `(deleted meal)` fallback and contributes 0 to totals.
 - `date` is a real ISO calendar date. The planner renders the 7 dates (Sat→Fri) of the week containing `?date=` (default today, validated; falls back to the local wall-clock day). **No legacy / migration:** the dated shape *is* the slot shape, so `parseSlots` simply keeps slots with a valid `date` and ignores anything else.
 - `meal_type` is one of `["breakfast","lunch","dinner","snack"]`.
 - Any macro field may be missing or `null`. `summarizeMacros` only emits keys that appeared at least once.
@@ -137,7 +137,7 @@ Defined in `view/utils.js`. Pure presentation helpers, covered by `tests/unit/vi
 
 A thin shell:
 
-- `App.init(el, listName)` — creates the per-list `api`, then reads `?view=`: `trends` → `TrendsView.init` (the trends view reads the week list, so this is gated before the list branch; `?list=library&view=trends` is harmless-empty). Otherwise dispatches to `WeekView.init` or `LibraryView.init`.
+- `App.init(el, listName)` — creates the per-list `api`, then reads `?view=`: `trends` → `TrendsView.init` (the trends view reads a planner list, so this is gated before the list branch; `?list=library&view=trends` is harmless-empty). Otherwise dispatches to `WeekView.init` (any non-`library` list) or `LibraryView.init`. The planner is **not** tied to the name `week` — `week` is just `DEFAULT_LIST_NAME`; any non-library `?list=` renders a planner, so all in-view nav links must carry the *current* `api.listName`, never a literal `week`.
 - `App.ensureMockSeed()` — one-time `DEMO_LIBRARY` insert when running in mock mode with an empty library. Called from `index.html` before any view init.
 
 ## View module responsibilities
@@ -151,9 +151,9 @@ Each `*View.init(container, api)` module:
 
 `LibraryView` additionally calls back to `App.ensureMockSeed()` during render so a freshly opened mock-mode library page populates itself.
 
-`WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing. It resolves a module-level `weekOf` once in `init` (from `?date=` validated via `isIsoDate`, else `localIsoDate(new Date())`, snapped to `weekStart`); `render` iterates `weekDates(weekOf)`, tags columns/sections/summaries with `data-date`, marks today's column `.today`, and renders a week-nav bar (`‹` / `Week of …` / `›` plain links that rewrite `?date=`, plus **Today** and **Trends**). A `Sync` re-render keeps the same `weekOf` (module state).
+`WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing. It resolves a module-level `weekOf` once in `init` (from `?date=` validated via `isIsoDate`, else `localIsoDate(new Date())`, snapped to `weekStart`); `render` iterates `weekDates(weekOf)`, tags columns/sections/summaries with `data-date`, marks today's column `.today`, and renders a week-nav bar (`‹` / `Week of …` / `›` plain links that rewrite `?date=`, plus **Today** and **Trends**). Every nav link carries the current `?list=` (`api.listName`, URL-encoded), not a hardcoded `week`, so the planner stays on whatever list it was opened under. A `Sync` re-render keeps the same `weekOf` (module state).
 
-`TrendsView` is **read-only** (no `Sync`). It resolves `weekOf` + `range` (∈ 2|4|12, default 4) from the URL, fetches the week + library in parallel, builds `summarizeMacrosByDate`, and renders range pills (links), a back-to-planner link, two inline-SVG bar charts (`cal`/`protein` per day, scaled to the range max), and a `summarizeWeeklyAverages` table. The SVG fills width via `preserveAspectRatio="none"` (non-uniform scale) so it holds **bars only**; the Saturday tick labels render as HTML in a sibling `.trends-axis` row, each positioned at its bar's center percentage, so glyphs never stretch with the chart. The range ends at the anchored week's Friday and extends `range` Saturdays back.
+`TrendsView` is **read-only** (no `Sync`). It resolves `weekOf` + `range` (∈ 2|4|12, default 4) from the URL, fetches the week + library in parallel, builds `summarizeMacrosByDate`, and renders range pills (links), a back-to-planner link (all carrying the current `?list=`, not a hardcoded `week`), two inline-SVG bar charts (`cal`/`protein` per day, scaled to the range max), and a `summarizeWeeklyAverages` table. The SVG fills width via `preserveAspectRatio="none"` (non-uniform scale) so it holds **bars only**; the Saturday tick labels render as HTML in a sibling `.trends-axis` row, each positioned at its bar's center percentage, so glyphs never stretch with the chart. The range ends at the anchored week's Friday and extends `range` Saturdays back.
 
 ### Picker + quick add
 
@@ -193,7 +193,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 
 Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
 
-- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Ad-hoc support: `list` tags quick-added meals `[adhoc]` and `list --adhoc` filters to them; on `update`, passing `--file` **promotes** the meal (clears the flag — a full recipe means it's real), with `--adhoc true|false` as the explicit override. A `trends` subcommand exports per-day macro totals over `--from`/`--to` (defaults: `to` = local today, `from` = `to − 27d`) from the dated week list (`--list <name>`, default `week`) joined live to the library, as `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range) or `json` (`{ from, to, days }`). Reads/writes the `listlet_meals` table (`list_name = 'library'`, or the `trends` `--list`).
+- `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Ad-hoc support: `list` tags quick-added meals `[adhoc]` and `list --adhoc` filters to them; on `update`, passing `--file` **promotes** the meal (clears the flag — a full recipe means it's real), with `--adhoc true|false` as the explicit override. A `trends` subcommand exports per-day macro totals over `--from`/`--to` (defaults: `to` = local today, `from` = `to − 27d`) from a dated calendar list (`--list <name>`, default `week`) joined live to the library, as `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range) or `json` (`{ from, to, days }`). Reads/writes the `listlet_meals` table (`list_name = 'library'`, or the `trends` `--list`).
 - `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
 - `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
 
@@ -201,7 +201,7 @@ Node scripts for tasks the browser app has no UI for yet — currently managing 
 
 ## Known limits
 
-A real dated calendar means the week list grows without bound (~4 slots/day). `shared/api.js#fetchItems()` has **no pagination**, and Supabase caps a single `select` at ~1000 rows ordered **ascending by `created_at`** — so once the list passes ~1000 rows (~1 year of daily use), the **newest slots silently drop first** from every read (the browser week/trends fetch *and* the CLI `trends`/list fetch). Nothing handles this yet (user-confirmed: deal with it later). Mitigation sketch when it bites:
+A real dated calendar means a calendar list grows without bound (~4 slots/day). `shared/api.js#fetchItems()` has **no pagination**, and Supabase caps a single `select` at ~1000 rows ordered **ascending by `created_at`** — so once the list passes ~1000 rows (~1 year of daily use), the **newest slots silently drop first** from every read (the browser week/trends fetch *and* the CLI `trends`/list fetch). Nothing handles this yet (user-confirmed: deal with it later). Mitigation sketch when it bites:
 
 - **Paginating fetch wrapper** — decorate the `api` object in our own code with a `.range()`-based loop that pulls all pages (shared `api.js` is upstream, do not edit; wrap it instead).
 - **`archive --before <date>` CLI** — move slot rows older than a cutoff into `archive-<year>` lists, keeping the live `week` list small. Trends/CLI would then read the relevant archive list(s) for historical ranges.

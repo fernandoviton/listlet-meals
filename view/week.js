@@ -1,5 +1,6 @@
-// Week view (the planner). Renders ?list=week as a real, dated Saturday-start
-// week anchored by ?date=YYYY-MM-DD (default: today). DOM + event wiring only.
+// Week view (the planner). Renders any non-library ?list= (default 'week') as a
+// real, dated Saturday-start week anchored by ?date=YYYY-MM-DD (default: today).
+// DOM + event wiring only.
 // All state transformations go through MealsCore; presentation helpers live in ViewUtils.
 
 var WeekView = (function() {

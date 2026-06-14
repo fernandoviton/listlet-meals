@@ -62,7 +62,7 @@ Meal types: `breakfast`, `lunch`, `dinner`, `snack`.
 
 - **No build step** — vanilla JS, IIFEs, script tags
 - **Mock mode** — localStorage on localhost, no backend needed
-- **Two lists** — `?list=library` for meal definitions, `?list=week` for planned slots. Each list item stores JSON in the shared `content` column.
+- **Library + calendars** — `?list=library` is the one special list (meal definitions); every other `?list=` is an independent calendar of planned slots (default `week`). Each list item stores JSON in the shared `content` column.
 - `meals-core.js` — pure state/transform logic (no DOM). Loaded in the browser and required by Jest.
 - `app.js` — DOM rendering and event wiring. Calls into `MealsCore` for every state transformation.
 - `shared/` — infrastructure from listlet-shared (auth, api, sync, header, home). **Do not edit.**
