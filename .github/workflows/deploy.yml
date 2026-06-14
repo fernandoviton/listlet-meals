@@ -54,7 +54,7 @@ jobs:
       - name: Stage deploy files
         run: |
           mkdir _site
-          cp -r shared view _site/
+          cp -r shared view core _site/
           cp index.html app.js app.css config.js meals-core.js _site/
 
       - name: Upload artifact
