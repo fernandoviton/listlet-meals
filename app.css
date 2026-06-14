@@ -365,6 +365,28 @@ body::before {
     color: var(--ink-2);
     margin-bottom: 0.6rem;
 }
+.trends-plot {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+.trends-chart-wrap { flex: 1; min-width: 0; }
+/* Y-axis scale lives in HTML (not the non-uniformly scaled SVG), matching the
+   chart's 140px height so labels line up with top / middle / baseline. */
+.trends-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px;
+    text-align: right;
+    min-width: 2.2rem;
+}
+.trends-ylabel {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--ink-2);
+}
 .trends-chart {
     display: block;
     width: 100%;
@@ -388,13 +410,16 @@ body::before {
     white-space: nowrap;
 }
 
+.trends-caption {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    color: var(--ink-2);
+    margin-bottom: 0.6rem;
+}
 .trends-table {
     width: 100%;
     border-collapse: collapse;
     background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    overflow: hidden;
     font-family: var(--sans);
     font-size: 0.85rem;
 }

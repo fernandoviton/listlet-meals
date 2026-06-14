@@ -89,20 +89,34 @@ var TrendsView = (function() {
         return html;
     }
 
-    // Inline SVG bar chart (one bar per day, scaled to the range max). The SVG
-    // fills width via preserveAspectRatio="none" (responsive without measuring),
-    // which scales non-uniformly — so it carries bars only. Saturday tick labels
-    // are rendered as HTML positioned by percentage, never as in-SVG <text>
-    // (which would stretch horizontally with the chart).
+    // Round a value up to a "nice" axis maximum so the y-axis top label is a
+    // clean number (1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10 × 10^n).
+    function niceCeil(v) {
+        if (!(v > 0)) return 1;
+        var pow = Math.pow(10, Math.floor(Math.log10(v)));
+        var n = v / pow;
+        var steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+        for (var i = 0; i < steps.length; i++) {
+            if (n <= steps[i] + 1e-9) return steps[i] * pow;
+        }
+        return 10 * pow;
+    }
+
+    // Inline SVG bar chart (one bar per day, scaled to a nice rounded max). The
+    // SVG fills width via preserveAspectRatio="none" (responsive without
+    // measuring), which scales non-uniformly — so it carries bars only. Both the
+    // Saturday x-ticks and the y-axis scale are rendered as HTML (never as in-SVG
+    // <text>, which would stretch horizontally with the chart).
     function renderChart(title, dates, byDate, key) {
         var barStep = 12, chartH = 100;
         var W = Math.max(dates.length * barStep, barStep);
-        var max = 1;
+        var dataMax = 0;
         for (var i = 0; i < dates.length; i++) {
             var m = byDate[dates[i]];
             var v = (m && typeof m[key] === 'number') ? m[key] : 0;
-            if (v > max) max = v;
+            if (v > dataMax) dataMax = v;
         }
+        var max = niceCeil(dataMax);
 
         var svg = '<svg class="trends-chart" viewBox="0 0 ' + W + ' ' + chartH + '" ' +
             'preserveAspectRatio="none" role="img" aria-label="' + escapeHtml(title) + '">';
@@ -128,9 +142,17 @@ var TrendsView = (function() {
         svg += '</svg>';
         var axis = '<div class="trends-axis">' + ticks + '</div>';
 
+        var yaxis = '<div class="trends-yaxis">' +
+            '<span class="trends-ylabel">' + Math.round(max) + '</span>' +
+            '<span class="trends-ylabel">' + Math.round(max / 2) + '</span>' +
+            '<span class="trends-ylabel">0</span>' +
+            '</div>';
+        var plot = '<div class="trends-plot">' + yaxis +
+            '<div class="trends-chart-wrap">' + svg + axis + '</div></div>';
+
         return '<div class="trends-section">' +
             '<div class="trends-section-title">' + escapeHtml(title) + '</div>' +
-            svg + axis + '</div>';
+            plot + '</div>';
     }
 
     function cell(avg, key) {
@@ -138,7 +160,11 @@ var TrendsView = (function() {
     }
 
     function renderTable(weekly) {
-        var html = '<table class="trends-table">';
+        var html = '<div class="trends-section">';
+        html += '<div class="trends-section-title">Weekly averages (per day)</div>';
+        html += '<div class="trends-caption">Each value is that week’s daily total ' +
+            'divided by the number of days logged, not by 7.</div>';
+        html += '<table class="trends-table">';
         html += '<thead><tr><th>Week of</th><th>Days</th><th>Cal</th><th>Protein</th><th>Carbs</th><th>Fat</th></tr></thead>';
         html += '<tbody>';
         for (var i = 0; i < weekly.length; i++) {
@@ -153,6 +179,7 @@ var TrendsView = (function() {
                 '</tr>';
         }
         html += '</tbody></table>';
+        html += '</div>';
         return html;
     }
 

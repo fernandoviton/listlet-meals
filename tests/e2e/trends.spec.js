@@ -73,6 +73,27 @@ test('trends renders a bar for a seeded date', async ({ page }) => {
     await expect(page.locator('.trends-bar[data-date="2026-06-06"]').first()).toBeVisible();
 });
 
+test('charts show a y-axis scale with a labeled max and zero', async ({ page }) => {
+    await seed(page, WEEK, LIBRARY);
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
+
+    // The Calories chart is the first section. Its y-axis carries the scale so a
+    // bar's height is readable without hovering.
+    const calY = page.locator('.trends-section').first().locator('.trends-yaxis');
+    await expect(calY.locator('.trends-ylabel')).toHaveCount(3);
+    await expect(calY.locator('.trends-ylabel').first()).toHaveText('600'); // max cal in range
+    await expect(calY.locator('.trends-ylabel').last()).toHaveText('0');
+});
+
+test('weekly table is titled and labeled as per-day averages', async ({ page }) => {
+    await seed(page, WEEK, LIBRARY);
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
+
+    const section = page.locator('.trends-section').filter({ has: page.locator('.trends-table') });
+    await expect(section.locator('.trends-section-title')).toContainText('per day');
+    await expect(section).toContainText(/days logged/i);
+});
+
 test('day-axis tick labels are HTML, not text inside the stretched SVG', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
     await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=2');
