@@ -372,10 +372,20 @@ body::before {
     overflow: visible;
 }
 .trends-bar { fill: var(--tomato); opacity: 0.85; }
+/* Day-axis labels live in HTML (not in the non-uniformly scaled SVG) so their
+   glyphs never stretch. Each is absolutely positioned at its bar's center %. */
+.trends-axis {
+    position: relative;
+    height: 1rem;
+    margin-top: 0.2rem;
+}
 .trends-tick {
-    fill: var(--ink-2);
+    position: absolute;
+    transform: translateX(-50%);
+    color: var(--ink-2);
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 .trends-table {

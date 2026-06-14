@@ -73,6 +73,21 @@ test('trends renders a bar for a seeded date', async ({ page }) => {
     await expect(page.locator('.trends-bar[data-date="2026-06-06"]').first()).toBeVisible();
 });
 
+test('day-axis tick labels are HTML, not text inside the stretched SVG', async ({ page }) => {
+    await seed(page, WEEK, LIBRARY);
+    await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');
+
+    // The bar SVG fills width via preserveAspectRatio="none", so any <text> inside
+    // it is stretched horizontally with it (digits visibly spread apart). Tick
+    // labels must live in HTML beside the SVG instead.
+    await expect(page.locator('.trends-chart text')).toHaveCount(0);
+
+    const axis = page.locator('.trends-section').first().locator('.trends-axis');
+    await expect(axis.locator('.trends-tick')).toHaveCount(2); // two Saturdays in range
+    await expect(axis.locator('.trends-tick').first()).toHaveText('5/30');
+    await expect(axis.locator('.trends-tick').nth(1)).toHaveText('6/6');
+});
+
 test('range pills navigate and change the number of weeks shown', async ({ page }) => {
     await seed(page, WEEK, LIBRARY);
     await page.goto('/?list=week&view=trends&date=' + ANCHOR + '&range=2');

@@ -85,10 +85,13 @@ var TrendsView = (function() {
         return html;
     }
 
-    // Inline SVG bar chart (one bar per day, scaled to the range max, Saturdays
-    // labelled). width:100% + viewBox so it's responsive without measuring.
+    // Inline SVG bar chart (one bar per day, scaled to the range max). The SVG
+    // fills width via preserveAspectRatio="none" (responsive without measuring),
+    // which scales non-uniformly — so it carries bars only. Saturday tick labels
+    // are rendered as HTML positioned by percentage, never as in-SVG <text>
+    // (which would stretch horizontally with the chart).
     function renderChart(title, dates, byDate, key) {
-        var barStep = 12, chartH = 100, labelH = 18, H = chartH + labelH;
+        var barStep = 12, chartH = 100;
         var W = Math.max(dates.length * barStep, barStep);
         var max = 1;
         for (var i = 0; i < dates.length; i++) {
@@ -97,8 +100,9 @@ var TrendsView = (function() {
             if (v > max) max = v;
         }
 
-        var svg = '<svg class="trends-chart" viewBox="0 0 ' + W + ' ' + H + '" ' +
+        var svg = '<svg class="trends-chart" viewBox="0 0 ' + W + ' ' + chartH + '" ' +
             'preserveAspectRatio="none" role="img" aria-label="' + escapeHtml(title) + '">';
+        var ticks = '';
         for (var j = 0; j < dates.length; j++) {
             var date = dates[j];
             var mm = byDate[date];
@@ -111,14 +115,18 @@ var TrendsView = (function() {
                 escapeHtml(ViewUtils.formatDayLabel(date) + ': ' + Math.round(val)) + '</title></rect>';
             if (MealsCore.dayOfWeek(date) === 'sat') {
                 var mLbl = Number(date.slice(5, 7)) + '/' + Number(date.slice(8, 10));
-                svg += '<text class="trends-tick" x="' + (x + barStep / 2) + '" y="' + (H - 5) +
-                    '" text-anchor="middle">' + escapeHtml(mLbl) + '</text>';
+                // Center over the bar: ((j + 0.5) / dates.length) of the full width.
+                var pct = ((j + 0.5) / dates.length) * 100;
+                ticks += '<span class="trends-tick" style="left:' + pct.toFixed(3) + '%">' +
+                    escapeHtml(mLbl) + '</span>';
             }
         }
         svg += '</svg>';
+        var axis = '<div class="trends-axis">' + ticks + '</div>';
 
         return '<div class="trends-section">' +
-            '<div class="trends-section-title">' + escapeHtml(title) + '</div>' + svg + '</div>';
+            '<div class="trends-section-title">' + escapeHtml(title) + '</div>' +
+            svg + axis + '</div>';
     }
 
     function cell(avg, key) {
