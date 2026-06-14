@@ -99,3 +99,11 @@ npm run test:all  # Both
 ```
 
 Don't commit on red.
+
+## Shell
+
+This is a Windows box, but **the Bash tool runs `bash`, not PowerShell** — don't mix
+the two. For a multi-line commit message in the Bash tool, use a bash heredoc
+(`git commit -F - <<'EOF' … EOF`), **never** PowerShell's `@'…'@` here-string
+(it parses as filename args and fails). If you use the PowerShell tool instead,
+then `@'…'@` is correct. Pick one tool and match its syntax the first time.
