@@ -126,6 +126,31 @@ test('clicking a slot card opens the recipe modal', async ({ page }) => {
     await expect(dialog).not.toHaveAttribute('open', '');
 });
 
+test('a focused slot card opens the recipe modal on Enter and Space', async ({ page }) => {
+    await seed(page,
+        [slotItem('s1', MON, 0, 'Pasta', { library_id: 'lib-pasta' })],
+        [libraryItem('lib-pasta', 'Pasta', PASTA_RECIPE)]
+    );
+    await page.goto('/?list=week&date=' + SAT);
+
+    const card = page.locator('.day-column[data-date="' + MON + '"] .slot-card');
+    const dialog = page.locator('#recipe-dialog');
+
+    // The card advertises role="button" tabindex="0", so the keyboard must reach
+    // the same modal a click opens.
+    await card.focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog).toHaveAttribute('open', '');
+    await expect(dialog.locator('h2')).toHaveText('Pasta');
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toHaveAttribute('open', '');
+
+    await card.focus();
+    await page.keyboard.press(' ');
+    await expect(dialog).toHaveAttribute('open', '');
+});
+
 test('a slot added via the picker from the real demo seed shows its recipe', async ({ page }) => {
     // Mirror the real GUI path: fresh localStorage → app auto-seeds the demo
     // library → add a meal via the picker → open the slot modal.

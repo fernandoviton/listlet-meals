@@ -59,14 +59,7 @@ bottom for context).
 
 ## Interaction / a11y
 
-8. **Slot cards aren't keyboard-operable.** A slot card is `role="button"
-   tabindex="0"` but only wires a `click` handler — tabbing to it and pressing
-   Enter/Space does nothing, so the recipe modal is mouse/touch-only. The library
-   card, by contrast, opens on Enter/Space. Inconsistent; either add a keydown
-   handler to the slot card or drop the button affordances. (Low effort to fix if
-   we agree it should match the library card.)
-
-9. **Ad-hoc meals accumulate invisibly.** Quick-add creates hidden `adhoc: true`
+8. **Ad-hoc meals accumulate invisibly.** Quick-add creates hidden `adhoc: true`
    library rows that can only be promoted or pruned via the CLI. Over time a heavy
    quick-add user builds an invisible pile of one-off rows. Is an in-app library
    editor (and/or an "unused ad-hoc" cleanup) on the roadmap, or is CLI-only
@@ -83,3 +76,7 @@ bottom for context).
 - **Next-week arrow sat flush against Today in the week-nav** (pre-existing WIP on
   the branch). Grouped the `‹ label ›` stepper apart from the Today/Trends jump
   links and confirmed the arrows always carry an explicit `?date=`.
+- **Slot cards weren't keyboard-operable.** The card is `role="button"
+  tabindex="0"` but only had a `click` handler, so the recipe modal was
+  mouse/touch-only. Added a keydown handler so Enter/Space open the modal (matching
+  the library card).

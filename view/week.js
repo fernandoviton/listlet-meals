@@ -202,6 +202,7 @@ var WeekView = (function() {
         var cards = container.querySelectorAll('.slot-card');
         for (var i = 0; i < cards.length; i++) {
             cards[i].addEventListener('click', onCardClick);
+            cards[i].addEventListener('keydown', onCardKeydown);
             var grab = cards[i].querySelector('.slot-grab');
             if (grab) grab.addEventListener('pointerdown', onGrabPointerDown);
         }
@@ -210,7 +211,19 @@ var WeekView = (function() {
     function onCardClick(e) {
         if (e.target.closest('.slot-grab')) return;
         if (suppressNextClick) { suppressNextClick = false; return; }
-        var card = e.currentTarget;
+        openCardModal(e.currentTarget);
+    }
+
+    // The card is role="button" tabindex="0", so Enter/Space must open the same
+    // modal a click does (matches the library card's keyboard affordance).
+    function onCardKeydown(e) {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        if (e.target.closest('.slot-grab')) return;
+        e.preventDefault();
+        openCardModal(e.currentTarget);
+    }
+
+    function openCardModal(card) {
         openRecipeModal(card.dataset.id, card.dataset.libraryId,
             card.querySelector('.slot-name').textContent);
     }
