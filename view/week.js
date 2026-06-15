@@ -63,6 +63,12 @@ var WeekView = (function() {
     async function loadAndRender() {
         container.innerHTML = '<div class="loading">Loading...</div>';
         if (!libraryApi) libraryApi = createApi('library');
+        // Bound the slot fetch to the visible week so the un-paginated ~1000-row
+        // cap can't drop recent slots. Set as the instance default so Sync's
+        // arg-less refresh stays bounded too. Nav is a full reload, so this is
+        // recomputed per load.
+        var weekDates = MealsCore.weekDates(weekOf);
+        api.setDateRange(weekDates[0], weekDates[weekDates.length - 1]);
         try {
             // Fetch the week and the library in parallel; the week renders as a
             // live join of slots → library by library_id (no stored snapshots).

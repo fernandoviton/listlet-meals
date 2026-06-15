@@ -1,28 +1,72 @@
 // API layer - Supabase backed with localStorage mock mode
 
+// Pull a dated calendar row's date out of its JSON content for mock-mode range
+// filtering. Mirrors the DB's generated `slot_date` column. Tolerant: a
+// dateless / unparseable row resolves to null (and is excluded by any range).
+function contentDate(item) {
+    try {
+        return JSON.parse(item.content).date || null;
+    } catch (e) {
+        return null;
+    }
+}
+
 function createApi(listName) {
     var isMock = !CONFIG.SUPABASE_URL;
     var storageKey = 'listlet_' + CONFIG.DB_TABLE + '_' + listName;
+
+    // Optional default { dateFrom, dateTo } applied when fetchItems is called
+    // with no explicit opts — so Sync's arg-less refresh stays bounded too.
+    var defaultRange = null;
 
     return {
         isMock: isMock,
         listName: listName,
 
         /**
-         * Fetch all items for this list
+         * Set a default ISO date range (YYYY-MM-DD) for subsequent arg-less
+         * fetchItems() calls. Calendar views set this to their visible window so
+         * the un-paginated ~1000-row fetch cap can't drop recent slots. Pass null
+         * to clear. An explicit fetchItems(opts) still overrides per-call.
+         * @param {?string} dateFrom
+         * @param {?string} dateTo
+         */
+        setDateRange(dateFrom, dateTo) {
+            defaultRange = (dateFrom || dateTo) ? { dateFrom: dateFrom, dateTo: dateTo } : null;
+        },
+
+        /**
+         * Fetch items for this list, optionally bounded to a slot_date range.
+         * @param {{dateFrom?: string, dateTo?: string}} [opts] ISO YYYY-MM-DD bounds
+         *   (inclusive). Omitted → the instance default range (see setDateRange),
+         *   or all rows when none is set.
          * @returns {Promise<Array>}
          */
-        async fetchItems() {
+        async fetchItems(opts) {
+            var range = opts || defaultRange || {};
+
             if (isMock) {
                 var saved = localStorage.getItem(storageKey);
-                return saved ? JSON.parse(saved) : [];
+                var items = saved ? JSON.parse(saved) : [];
+                if (range.dateFrom || range.dateTo) {
+                    items = items.filter(function(it) {
+                        var d = contentDate(it);
+                        if (!d) return false;
+                        if (range.dateFrom && d < range.dateFrom) return false;
+                        if (range.dateTo && d > range.dateTo) return false;
+                        return true;
+                    });
+                }
+                return items;
             }
 
-            var result = await window.supabaseClient
+            var query = window.supabaseClient
                 .from(CONFIG.DB_TABLE)
                 .select('*')
-                .eq('list_name', listName)
-                .order('created_at');
+                .eq('list_name', listName);
+            if (range.dateFrom) query = query.gte('slot_date', range.dateFrom);
+            if (range.dateTo) query = query.lte('slot_date', range.dateTo);
+            var result = await query.order('created_at');
 
             if (result.error) throw new Error(result.error.message);
             return result.data || [];

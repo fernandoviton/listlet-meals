@@ -109,15 +109,17 @@ function readMealFile(path) {
     return out;
 }
 
-// Raw { id, content } rows for a list. NOTE: like the browser, this single
-// query is capped at ~1000 rows by Supabase (ascending by created_at), so a
-// very long history would silently drop its oldest rows — see docs/architecture.md.
-async function fetchRows(listName) {
-    const { data, error } = await supabase
+// Raw { id, content } rows for a list, optionally bounded to a slot_date range
+// ({ from, to } ISO, inclusive). A bounded query (trends' dated slot fetch) stays
+// well under Supabase's ~1000-row cap; an unbounded one (the library) is tiny.
+async function fetchRows(listName, range) {
+    let query = supabase
         .from(DB_TABLE)
         .select('id, content')
-        .eq('list_name', listName)
-        .order('created_at');
+        .eq('list_name', listName);
+    if (range && range.from) query = query.gte('slot_date', range.from);
+    if (range && range.to) query = query.lte('slot_date', range.to);
+    const { data, error } = await query.order('created_at');
     if (error) throw error;
     return data || [];
 }
@@ -282,7 +284,7 @@ async function cmdTrends(args) {
     }
 
     const libraryById = MealsCore.indexLibrary(await fetchRows(LIST));
-    const slots = (await fetchRows(listName))
+    const slots = (await fetchRows(listName, { from, to }))
         .map((r) => MealsCore.parseContent(r.content))
         .filter((p) => p && p.kind === 'slot' && MealsCore.isIsoDate(p.date));
     const byDate = MealsCore.summarizeMacrosByDate(slots, libraryById);
