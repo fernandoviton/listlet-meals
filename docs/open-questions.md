@@ -15,17 +15,6 @@ bottom for context).
 
 ---
 
-## Resolved
-
-- **The ~1000-row fetch cap dropping the _newest_ slots first.** Was: `shared/api.js`
-  had no date filter and Supabase orders ascending by `created_at`, so past ~1,000 rows
-  (~1 year of ~4 slots/day) the most recent slots fell out of every calendar read.
-  Resolved by a generated, content-derived `slot_date` column (`sql/migrations/001_add_slot_date.sql`)
-  plus a `{ dateFrom, dateTo }` range fetch (`shared/api.js#fetchItems` / `setDateRange`,
-  used by `view/week.js`, `view/trends.js`, and the CLI `trends`). Calendar reads now pull
-  only the visible week / trends range (~28 rows), well under the cap. The library list
-  stays unpaginated but is tiny — see architecture.md "Known limits".
-
 ## Already fixed (clear bugs, committed on this branch)
 
 - **Trends day-axis labels were horizontally stretched.** The bar SVG fills width
