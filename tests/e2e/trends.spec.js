@@ -129,6 +129,29 @@ test('a back link returns to the planner at the same anchor', async ({ page }) =
     await expect(back).not.toHaveAttribute('href', /view=trends/);
 });
 
+test('weekly-averages table fits a narrow phone without horizontal scroll', async ({ page }) => {
+    // The 6-column table is width:100%, but its min-content width (cell padding +
+    // header text) used to edge past a ~360px phone, giving the page a sideways
+    // scroll. Mobile cell padding is tightened so it fits. range=12 = densest table.
+    await page.setViewportSize({ width: 360, height: 760 });
+    await seed(page, WEEK, LIBRARY);
+    await page.goto('/?list=planner&view=trends&date=' + ANCHOR + '&range=12');
+    await expect(page.locator('.trends-table')).toBeVisible();
+
+    // No sideways page scroll at phone width.
+    const pageOverflow = await page.evaluate(() => {
+        const de = document.documentElement;
+        return de.scrollWidth - de.clientWidth;
+    });
+    expect(pageOverflow).toBeLessThanOrEqual(0);
+
+    // And the table is not internally clipped (its content fits its own box).
+    const tableClipped = await page.locator('.trends-table').evaluate(
+        (el) => el.scrollWidth > el.clientWidth + 1
+    );
+    expect(tableClipped).toBe(false);
+});
+
 test('trends nav links preserve the current list name (never a hardcoded list)', async ({ page }) => {
     // Seed a calendar under an arbitrary list name and open trends on it.
     await page.goto('/');

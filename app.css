@@ -1104,6 +1104,12 @@ dialog#recipe-dialog[open] {
     .day-label { font-size: 1.4rem; }
     .dialog-body { padding: 1.1rem 1.2rem 0.5rem; }
     .dialog-actions { padding: 0.6rem 1rem 0.9rem; }
+
+    /* Squish the weekly-averages table so its 6 columns fit a narrow phone
+       without horizontal scroll — desktop has ample room and is untouched. */
+    .trends-section { padding: 0.9rem 0.7rem; }
+    .trends-table { font-size: 0.8rem; }
+    .trends-table th, .trends-table td { padding: 0.45rem 0.4rem; }
 }
 
 /* =========================================================================
