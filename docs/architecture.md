@@ -95,6 +95,7 @@ Quantities are plain decimals (fractions are a render concern). Macros are **per
 Notes:
 - A slot stores **no name/macros/recipe snapshot**. A calendar page fetches its own list plus the shared `library` on boot and renders as a **live join**: it builds a `{ [libraryRowId]: parsedMeal }` map (`MealsCore.indexLibrary`) and resolves each slot's name + macros from its library row by `library_id` (`MealsCore.resolveSlot`); expanding a slot fetches the same row's recipe. A library edit (e.g. via the CLI) therefore shows up on the next reload without remove/re-add — and **retroactively changes past day/week totals** (accepted). A slot whose library meal was **deleted** has no match, so it renders a `(deleted meal)` fallback and contributes 0 to totals.
 - `date` is a real ISO calendar date. The planner renders the 7 dates (Sat→Fri) of the week containing `?date=` (default today, validated; falls back to the local wall-clock day). **No legacy / migration:** the dated shape *is* the slot shape, so `parseSlots` simply keeps slots with a valid `date` and ignores anything else.
+- The DB mirrors a slot's `date` in a **generated, content-derived `slot_date` column** (`slot_date date generated always as (meals_slot_date(content)) stored`, indexed on `(list_name, slot_date)` — see `sql/setup.sql` / `sql/migrations/001_add_slot_date.sql`). `content` stays the single writable source of truth; `slot_date` is a read-only projection you can't write directly, so it can't drift. It exists purely so calendar reads can **range-filter by date** (`shared/api.js#fetchItems({dateFrom,dateTo})`) and fetch only the visible week / trends range instead of the whole list — the fix for the old ~1000-row cap (see "Known limits"). Library rows and any dateless/malformed content resolve to `NULL slot_date` (the `meals_slot_date` helper swallows parse errors), so a range query excludes them, exactly like `parseSlots`.
 - `meal_type` is one of `["breakfast","lunch","dinner","snack"]`.
 - Any macro field may be missing or `null`. `summarizeMacros` only emits keys that appeared at least once.
 - `order` is per-(date, meal_type), 0-indexed, and recompacted on move / delete.
@@ -151,9 +152,9 @@ Each `*View.init(container, api)` module:
 
 `LibraryView` additionally calls back to `App.ensureMockSeed()` during render so a freshly opened mock-mode library page populates itself.
 
-`WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing. It resolves a module-level `weekOf` once in `init` (from `?date=` validated via `isIsoDate`, else `localIsoDate(new Date())`, snapped to `weekStart`); `render` iterates `weekDates(weekOf)`, tags columns/sections/summaries with `data-date`, marks today's column `.today`, and renders a week-nav bar (`‹` / `Week of …` / `›` plain links that rewrite `?date=`, plus **Today** and **Trends**). Every nav link carries the current `?list=` (`api.listName`, URL-encoded), not a hardcoded name, so the planner stays on whatever list it was opened under. A `Sync` re-render keeps the same `weekOf` (module state).
+`WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). Before fetching it calls `api.setDateRange(weekDates[0], weekDates[6])` so the slot fetch — and Sync's later arg-less refresh — is **bounded to the visible week** via the `slot_date` column (no ~1000-row cap exposure). Nav is a full page reload, so the range is recomputed per load; the library fetch is left unbounded. The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing. It resolves a module-level `weekOf` once in `init` (from `?date=` validated via `isIsoDate`, else `localIsoDate(new Date())`, snapped to `weekStart`); `render` iterates `weekDates(weekOf)`, tags columns/sections/summaries with `data-date`, marks today's column `.today`, and renders a week-nav bar (`‹` / `Week of …` / `›` plain links that rewrite `?date=`, plus **Today** and **Trends**). Every nav link carries the current `?list=` (`api.listName`, URL-encoded), not a hardcoded name, so the planner stays on whatever list it was opened under. A `Sync` re-render keeps the same `weekOf` (module state).
 
-`TrendsView` is **read-only** (no `Sync`). It resolves `weekOf` + `range` (∈ 2|4|12, default 4) from the URL, fetches the week + library in parallel, builds `summarizeMacrosByDate`, and renders range pills (links), a back-to-planner link (all carrying the current `?list=`, not a hardcoded name), two inline-SVG bar charts (`cal`/`protein` per day, scaled to the range max), and a `summarizeWeeklyAverages` table. The SVG fills width via `preserveAspectRatio="none"` (non-uniform scale) so it holds **bars only**; the Saturday tick labels render as HTML in a sibling `.trends-axis` row, each positioned at its bar's center percentage, so glyphs never stretch with the chart. The range ends at the anchored week's Friday and extends `range` Saturdays back.
+`TrendsView` is **read-only** (no `Sync`). It resolves `weekOf` + `range` (∈ 2|4|12, default 4) from the URL, fetches the week + library in parallel (the slot fetch bounded to the range window via `api.fetchItems({dateFrom,dateTo})`, the same `rangeWindow()` used by `render`), builds `summarizeMacrosByDate`, and renders range pills (links), a back-to-planner link (all carrying the current `?list=`, not a hardcoded name), two inline-SVG bar charts (`cal`/`protein` per day, scaled to the range max), and a `summarizeWeeklyAverages` table. The SVG fills width via `preserveAspectRatio="none"` (non-uniform scale) so it holds **bars only**; the Saturday tick labels render as HTML in a sibling `.trends-axis` row, each positioned at its bar's center percentage, so glyphs never stretch with the chart. The range ends at the anchored week's Friday and extends `range` Saturdays back.
 
 ### Picker + quick add
 
@@ -180,6 +181,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 `shared/api.js#createApi(listName)`:
 - **Mock mode** (no `SUPABASE_URL` in config) — reads/writes `localStorage` under `listlet_<DB_TABLE>_<listName>`, e.g. `listlet_listlet_meals_groceries` and `listlet_listlet_meals_library`.
 - **Supabase mode** — CRUD on the `listlet_meals` table, filtered by `list_name`.
+- `fetchItems(opts)` takes an optional `{ dateFrom, dateTo }` (ISO `YYYY-MM-DD`, inclusive): Supabase mode chains `.gte('slot_date', …)/.lte(…)`; mock mode filters the array by each row's parsed content date. `setDateRange(from, to)` stores an instance default that arg-less `fetchItems()` honors, so `Sync`'s refresh stays bounded. This is the one meals-specific edit to `shared/` (see CLAUDE.md); calling `fetchItems()` with no range is unchanged.
 
 `shared/sync.js` provides cross-tab refresh; `app.js` re-renders when notified.
 
@@ -201,12 +203,9 @@ Node scripts for tasks the browser app has no UI for yet — currently managing 
 
 ## Known limits
 
-A real dated calendar means a calendar list grows without bound (~4 slots/day). `shared/api.js#fetchItems()` has **no pagination**, and Supabase caps a single `select` at ~1000 rows ordered **ascending by `created_at`** — so once the list passes ~1000 rows (~1 year of daily use), the **newest slots silently drop first** from every read (the browser week/trends fetch *and* the CLI `trends`/list fetch). Nothing handles this yet (user-confirmed: deal with it later). Mitigation sketch when it bites:
+A calendar list grows without bound (~4 slots/day), and Supabase caps a single un-paginated `select` at ~1000 rows ordered **ascending by `created_at`** — so an unbounded read past ~1000 rows would silently drop the **newest** slots first. **Calendar reads are now bounded** by the `slot_date` range fetch (`fetchItems({dateFrom,dateTo})`), pulling only the visible week (~28 rows) or trends range, so the planner, browser trends, and CLI `trends` never approach the cap. The remaining unbounded reads are the **library** fetch and `createApi.getAllLists` — both small and nowhere near 1000 rows. If the library ever grows that large, the same mitigation applies (a `.range()`-based paginating loop, or an `archive --before <date>` CLI that moves old slot rows into `archive-<year>` lists).
 
-- **Paginating fetch wrapper** — decorate the `api` object in our own code with a `.range()`-based loop that pulls all pages (shared `api.js` is upstream, do not edit; wrap it instead).
-- **`archive --before <date>` CLI** — move slot rows older than a cutoff into `archive-<year>` lists, keeping the live `week` list small. Trends/CLI would then read the relevant archive list(s) for historical ranges.
-
-This is future work alongside auto meal-picking and meal-prep planning.
+This is noted alongside future work like auto meal-picking and meal-prep planning.
 
 ## Tests
 
@@ -235,12 +234,13 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `view/trends.js` | `TrendsView` — read-only `?view=trends` (charts + weekly averages) |
 | `app.css` | App-specific styles |
 | `config.js` / `config.local.js` | Runtime config |
-| `shared/` | Upstream starter kit — do not edit |
+| `shared/` | Upstream starter kit — do not edit (one documented exception: `api.js` date-range param) |
 | `scripts/library.js` | CLI to list/add/update/delete library meals (no UI yet) |
 | `scripts/supabase-cli.js` | Shared CLI Supabase client + refresh-token login |
 | `scripts/google-login.js` | One-time OAuth bootstrap for the CLI refresh token |
 | `.env` / `.env.example` | CLI credentials (gitignored / template) |
-| `sql/setup.sql` | Supabase table setup |
+| `sql/setup.sql` | Supabase table setup (incl. generated `slot_date` column) |
+| `sql/migrations/001_add_slot_date.sql` | Add `slot_date` to an existing prod table |
 | `tests/unit/` | Jest |
 | `tests/e2e/` | Playwright |
 | `docs/architecture.md` | This file |

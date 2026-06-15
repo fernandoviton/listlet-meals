@@ -8,7 +8,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full architecture ref
 
 - **TDD whenever there's a test that can fail first.** For pure logic, write the failing Jest test before implementing. For DOM/glue changes, write or update the Playwright E2E spec and confirm it fails before touching `app.js` / `app.css`. Only skip TDD when no test can meaningfully assert the change (pure styling tweaks, copy edits).
 - **Code split.** All state transformations live in `meals-core.js` (pure functions, no DOM, no `window`). `app.js` is a thin render/event-wiring layer. Never put business logic in `app.js`.
-- **Do not edit `shared/`.** It is the upstream starter kit. All meal-specific data is JSON-encoded into the shared `content` column.
+- **Do not edit `shared/`.** It is the upstream starter kit. All meal-specific data is JSON-encoded into the shared `content` column. *One documented exception:* `shared/api.js#fetchItems` carries an optional `{ dateFrom, dateTo }` range param (plus `setDateRange`) so calendar reads can fetch by date — see architecture.md "Persistence". Keep further `shared/` edits to a minimum.
 
 ## Data model — the library + calendar lists
 
@@ -31,7 +31,7 @@ The shared API persists `content` only. Data lives in named lists (via `?list=`)
   ```
   { kind: "slot", library_id, date: "YYYY-MM-DD", meal_type, order }
   ```
-  `date` is an ISO date ( append `?date=YYYY-MM-DD` to the URL to anchor which Saturday-start week is rendered; default is today). `order` is per-(date, meal_type).
+  `date` is an ISO date ( append `?date=YYYY-MM-DD` to the URL to anchor which Saturday-start week is rendered; default is today). `order` is per-(date, meal_type). The DB mirrors `date` in a generated, content-derived **`slot_date`** column (indexed) so calendar reads can range-fetch by date — `content` stays the only writable source of truth. See architecture.md.
 
 Slots store **no name/macros snapshot**. A calendar page fetches its own list plus the shared `library` on boot and renders as a live join: a slot resolves its name + macros (and, on expand, its recipe) from the live library row by `library_id`, so a library edit (e.g. via the CLI) shows up on reload without remove/re-add. A slot whose library meal was **deleted** has no match — it renders a `(deleted meal)` fallback and contributes 0 to day totals. Editing a library meal's macros therefore retroactively changes past day/week totals (accepted tradeoff).
 
@@ -86,7 +86,7 @@ node scripts/library.js trends --format json                               # def
 - `--type` is one of `breakfast|lunch|dinner|snack` (default `dinner`); all macros are optional. `add` builds `content` via `MealsCore.makeLibraryMeal`.
 - **Ad-hoc extraction workflow (Claude Code):** `list --adhoc` shows quick-added meals (tagged `[adhoc]` in plain `list`). To turn one into a reusable recipe, draft a whole-meal JSON (per the data model + recipe authoring convention above) and run `update --id <uuid> --file meal.json`. Passing `--file` on `update` **auto-clears the adhoc flag** (a full recipe means it's a real meal now); `--adhoc true|false` overrides explicitly. An ad-hoc meal that should become pickable without a recipe can be promoted via `update --id <uuid> --adhoc false`.
 - **To edit a meal use `update`, never delete+re-add.** `update` rewrites the row's `content` (via `MealsCore.updateLibraryMeal`) while keeping the same `id`, so week slots that point at it keep their live join. Select by `--name` or `--id`; only the flags you pass change (pass a macro as `""` to clear it), and with `--id` a `--name` renames the meal. A delete+re-add assigns a new `id` and orphans any already-placed week slot — since slots no longer snapshot name/macros, an orphaned slot renders the `(deleted meal)` fallback and contributes 0 to totals.
-- **`trends`** exports per-day macro totals over `--from`/`--to` (defaults: `to` = today, `from` = `to − 27d`), reading a dated calendar list (`--list <name>`, required) joined live to the library. `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range, empty days blank) or `json` (`{ from, to, days: [...] }`). Like the browser, its fetch is capped at ~1000 rows (see architecture.md "Known limits").
+- **`trends`** exports per-day macro totals over `--from`/`--to` (defaults: `to` = today, `from` = `to − 27d`), reading a dated calendar list (`--list <name>`, required) joined live to the library. `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range, empty days blank) or `json` (`{ from, to, days: [...] }`). Like the browser, its slot fetch is **bounded to `--from`/`--to`** via the generated `slot_date` column, so it stays well under Supabase's ~1000-row cap (see architecture.md "Known limits").
 - Writes to the real Supabase `listlet_meals` table (`list_name='library'`, or `trends`'s `--list`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.
 - Requires `.env` (see `.env.example`) with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_REFRESH_TOKEN`. **If you (Claude) hit an auth error**, the token is missing/expired — ask the user to run `node scripts/google-login.js` once (it needs a browser OAuth round-trip you can't perform).
 

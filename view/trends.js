@@ -29,11 +29,27 @@ var TrendsView = (function() {
         loadAndRender();
     }
 
+    // The inclusive ISO window the view covers: ends at the anchored week's
+    // Friday, extends `range` Saturdays back.
+    function rangeWindow() {
+        return {
+            from: MealsCore.addDays(weekOf, -7 * (range - 1)),
+            to: MealsCore.addDays(weekOf, 6)
+        };
+    }
+
     async function loadAndRender() {
         container.innerHTML = '<div class="loading">Loading...</div>';
         if (!libraryApi) libraryApi = createApi('library');
+        // Bound the slot fetch to the visible range so the un-paginated ~1000-row
+        // cap can't drop recent slots.
+        var win = rangeWindow();
+        api.setDateRange(win.from, win.to);
         try {
-            var results = await Promise.all([api.fetchItems(), libraryApi.fetchItems()]);
+            var results = await Promise.all([
+                api.fetchItems({ dateFrom: win.from, dateTo: win.to }),
+                libraryApi.fetchItems()
+            ]);
             var libraryById = MealsCore.indexLibrary(results[1]);
             var slots = parseSlots(results[0]);
             render(MealsCore.summarizeMacrosByDate(slots, libraryById));
@@ -54,9 +70,8 @@ var TrendsView = (function() {
     }
 
     function render(byDate) {
-        // Range ends at the anchored week's Friday, extends `range` Saturdays back.
-        var to = MealsCore.addDays(weekOf, 6);
-        var from = MealsCore.addDays(weekOf, -7 * (range - 1));
+        var win = rangeWindow();
+        var from = win.from, to = win.to;
         var dates = MealsCore.dateRange(from, to);
         var weekly = MealsCore.summarizeWeeklyAverages(byDate, from, to);
 
