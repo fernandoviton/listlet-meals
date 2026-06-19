@@ -188,9 +188,11 @@ var WeekView = (function() {
             '</div>' +
             '</dialog>';
         html += '<dialog id="picker-dialog">' +
-            '<div class="picker-header">Add meal to <span class="picker-day"></span></div>' +
+            '<div class="picker-header">' +
+                '<span class="picker-title">Add meal to <span class="picker-day"></span></span>' +
+                '<button class="picker-close" type="button" aria-label="Close">&times;</button>' +
+            '</div>' +
             '<div class="picker-body"></div>' +
-            '<button class="picker-close" type="button">Cancel</button>' +
             '</dialog>';
         container.innerHTML = html;
 
@@ -530,7 +532,7 @@ var WeekView = (function() {
         html += '</div>';
         html += '<div class="quick-add-error" hidden></div>';
         html += '<div class="quick-add-actions">' +
-            '<button type="button" class="quick-add-back">Back</button>' +
+            '<button type="button" class="quick-add-back">&larr; Back</button>' +
             '<button type="submit" class="quick-add-submit">Add to ' + escapeHtml(dayLabel) + '</button>' +
             '</div>';
         html += '</form>';
