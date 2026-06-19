@@ -32,6 +32,12 @@ var WeekView = (function() {
     var dragState = null;
     var suppressNextClick = false;
 
+    // A background Sync tick (30s poll / realtime) must never tear down a dialog
+    // the user is mid-edit in — render() rebuilds container.innerHTML, dialogs
+    // included. So while a dialog is open we stash the fresh items and defer the
+    // re-render until the dialog closes (see flushPendingSync / bindDialogEvents).
+    var pendingSyncRender = false;
+
     function init(el, listApi) {
         container = el;
         api = listApi;
@@ -40,10 +46,26 @@ var WeekView = (function() {
 
         Sync.init(api, function(fresh) {
             items = fresh || [];
+            if (isDialogOpen()) {
+                pendingSyncRender = true;
+                return;
+            }
             render();
         });
 
         loadAndRender();
+    }
+
+    function isDialogOpen() {
+        var recipe = document.getElementById('recipe-dialog');
+        var picker = document.getElementById('picker-dialog');
+        return !!((recipe && recipe.open) || (picker && picker.open));
+    }
+
+    function flushPendingSync() {
+        if (!pendingSyncRender) return;
+        pendingSyncRender = false;
+        render();
     }
 
     // ?date= → the Saturday on/before it; an absent/invalid param falls back to
@@ -622,13 +644,16 @@ var WeekView = (function() {
             dialog.addEventListener('click', function(e) {
                 if (e.target === dialog) dialog.close();
             });
+            dialog.addEventListener('close', flushPendingSync);
         }
         var picker = document.getElementById('picker-dialog');
         if (picker) {
             picker.querySelector('.picker-close').addEventListener('click', function() { picker.close(); });
-            picker.addEventListener('click', function(e) {
-                if (e.target === picker) picker.close();
-            });
+            // No light-dismiss for the picker: it must close only via Cancel or a
+            // successful add, so an in-progress quick-add can't be lost. Ignore
+            // backdrop clicks (no listener) and block Escape's native close.
+            picker.addEventListener('cancel', function(e) { e.preventDefault(); });
+            picker.addEventListener('close', flushPendingSync);
         }
     }
 

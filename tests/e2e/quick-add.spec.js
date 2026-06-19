@@ -132,6 +132,48 @@ test('quick add: blank name shows an inline error and keeps the dialog open', as
     await expect(page.locator('.day-column[data-date="' + WED + '"] .slot-card')).toHaveCount(0);
 });
 
+test('quick add: a background sync does not dismiss the dialog or lose typed input', async ({ page }) => {
+    await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
+    await page.goto('/?list=planner&date=' + SAT);
+
+    await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
+    await page.locator('#picker-dialog .picker-quick-add').click();
+    const nameInput = page.locator('#picker-dialog .quick-add-form input[name="name"]');
+    await nameInput.fill('Leftover curry');
+
+    // Simulate the 30s poll tick (Sync) firing mid-input. It must not tear the
+    // open dialog down or clobber what's been typed.
+    await page.evaluate(() => window.Sync.manualRefresh());
+
+    await expect(page.locator('#picker-dialog')).toHaveAttribute('open', '');
+    await expect(nameInput).toHaveValue('Leftover curry');
+});
+
+test('picker: clicking the backdrop does not dismiss the dialog', async ({ page }) => {
+    await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
+    await page.goto('/?list=planner&date=' + SAT);
+
+    await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
+    const dialog = page.locator('#picker-dialog');
+    await expect(dialog).toHaveAttribute('open', '');
+
+    // A click landing on the dialog itself (the backdrop) must NOT close it.
+    await dialog.dispatchEvent('click');
+    await expect(dialog).toHaveAttribute('open', '');
+});
+
+test('picker: pressing Escape does not dismiss the dialog', async ({ page }) => {
+    await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
+    await page.goto('/?list=planner&date=' + SAT);
+
+    await page.locator('.day-column[data-date="' + WED + '"] .day-add').click();
+    const dialog = page.locator('#picker-dialog');
+    await expect(dialog).toHaveAttribute('open', '');
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveAttribute('open', '');
+});
+
 test('quick add: recipe modal on an ad-hoc slot shows a no-recipe note and no scale stepper', async ({ page }) => {
     await seed(page, [], [libraryMealRow('lib-other', 'Other', 'dinner')]);
     await page.goto('/?list=planner&date=' + SAT);
