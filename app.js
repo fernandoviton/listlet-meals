@@ -11,11 +11,56 @@ var App = (function() {
             TrendsView.init(el, api);
             return;
         }
+        if (listName === 'capture') {
+            CapturesView.init(el, api);
+            return;
+        }
         if (listName === 'library') {
             LibraryView.init(el, api);
         } else {
             WeekView.init(el, api);
         }
+    }
+
+    // ---- Voice/quick capture plumbing -------------------------------------
+    // The iOS Shortcut opens ?list=capture&text=…&at=… . We stash that to
+    // localStorage *before* auth so it survives the OAuth sign-in redirect
+    // (which strips the query string), then the CapturesView flushes it once
+    // authenticated. See docs/voice-capture.md.
+    var PENDING_KEY = 'listlet_meals_pending_capture';
+
+    function stashPendingCaptureFromUrl() {
+        if (typeof window === 'undefined') return;
+        var params = new URLSearchParams(window.location.search);
+        var text = params.get('text');
+        if (!text || !text.trim()) return;
+        var pending = {
+            text: text.trim(),
+            at: (params.get('at') || '').trim() || null,
+            source: (params.get('source') || '').trim() || 'shortcut'
+        };
+        try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); } catch (e) {}
+        // Strip the capture params so a reload can't double-capture; keep the rest.
+        params.delete('text'); params.delete('at'); params.delete('source');
+        var qs = params.toString();
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+        }
+    }
+
+    function hasPendingCapture() {
+        try { return !!localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
+    }
+
+    // Read + clear the stashed capture atomically (so a flush can't double-insert).
+    function takePendingCapture() {
+        var raw;
+        try {
+            raw = localStorage.getItem(PENDING_KEY);
+            localStorage.removeItem(PENDING_KEY);
+        } catch (e) { return null; }
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
     // Recipes are pre-normalized (numeric/null qty, string item, non-empty steps) —
@@ -178,6 +223,9 @@ var App = (function() {
 
     return {
         init: init,
-        ensureMockSeed: ensureMockSeed
+        ensureMockSeed: ensureMockSeed,
+        stashPendingCaptureFromUrl: stashPendingCaptureFromUrl,
+        hasPendingCapture: hasPendingCapture,
+        takePendingCapture: takePendingCapture
     };
 })();

@@ -12,7 +12,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full architecture ref
 
 ## Data model — the library + calendar lists
 
-The shared API persists `content` only. Data lives in named lists (via `?list=`), each item storing JSON in its `content`. One list name is special — **`library`** renders the library view — and **every other `?list=` is an independent calendar**: a planner of dated slots. All calendars are structurally identical and there is **no default/privileged calendar name** — a `?list=` must always be given explicitly (the app shows the Home list-picker when it's absent). So there are two *kinds* of list (one special `library`, plus any number of calendars), not two fixed lists:
+The shared API persists `content` only. Data lives in named lists (via `?list=`), each item storing JSON in its `content`. Two list names are special — **`library`** renders the library view and **`capture`** renders the raw voice/quick-capture log (see "Voice capture" below) — and **every other `?list=` is an independent calendar**: a planner of dated slots. All calendars are structurally identical and there is **no default/privileged calendar name** — a `?list=` must always be given explicitly (the app shows the Home list-picker when it's absent). So there are two *kinds* of list (one special `library`, plus any number of calendars), not two fixed lists:
 
 - `?list=library` — meal definitions (the one special, shared list)
   ```
@@ -35,6 +35,12 @@ The shared API persists `content` only. Data lives in named lists (via `?list=`)
 
 Slots store **no name/macros snapshot**. A calendar page fetches its own list plus the shared `library` on boot and renders as a live join: a slot resolves its name + macros (and, on expand, its recipe) from the live library row by `library_id`, so a library edit (e.g. via the CLI) shows up on reload without remove/re-add. A slot whose library meal was **deleted** has no match — it renders a `(deleted meal)` fallback and contributes 0 to day totals. Editing a library meal's macros therefore retroactively changes past day/week totals (accepted tradeoff).
 
+- `?list=capture` — the raw voice/quick-capture log (one special list).
+  ```
+  { kind: "capture", text, at, source, processed_at, note? }
+  ```
+  Captures are stored **verbatim** (dictated `text` + event time `at`); the capture path does **no** parsing or macro math. `processed_at` is null until a later [reconcile step](docs/voice-capture.md) turns the raw text into structured data (meal slots, library recipes, symptom rows) and stamps it with an outcome `note`. The iOS Shortcut opens `?list=capture&text=…&at=…`; the page piggybacks on the existing Google session (no endpoint/secret), stashing the capture pre-auth so it survives the OAuth redirect. Captures have no `date`, so `slot_date` is NULL and they're excluded from calendar/trends range fetches. Reconciled **symptoms** land on a calendar as `{ kind: "symptom", text, date, at, category, severity }` rows. See [`docs/voice-capture.md`](docs/voice-capture.md) and the `/reconcile-captures` skill.
+
 The week renders 7 columns (Sat→Fri) for the week containing `?date=`; prev/next nav rewrites the param, **Today** drops it, **Trends** opens the trends view. There is **no migration / legacy support** — the dated shape is the slot shape; `parseSlots` keeps only slots with a valid `date`.
 
 **Trends** (`?list=<calendar>&view=trends[&date=][&range=2|4|12]`; calendar defaults to `week`): a read-only view ([`view/trends.js`](view/trends.js)) charting calories/protein per day and a weekly-averages table over the last `range` weeks (default 4), ending at the anchored week. Averages divide by *days logged*, not 7. Any macro field may be `null` / absent.
@@ -53,7 +59,8 @@ The week renders 7 columns (Sat→Fri) for the week containing `?date=`; prev/ne
   - `core/library.js` (`MealsLibrary`) — normalizeRecipe, makeLibraryMeal, updateLibraryMeal, scaleRecipe, summarizeLibrary, groupLibraryByType, indexLibrary
   - `core/slots.js` (`MealsSlots`) — nextOrder, addSlot, moveSlot, removeSlot, setMealType, filterSlotsByType (all keyed on `date`)
   - `core/macros.js` (`MealsMacros`) — resolveSlot, summarizeMacros, summarizeMacrosByDate, summarizeWeeklyAverages
-  Index-html script order: content → dates → library → slots → macros → meals-core (facade) → views. Each module has a 1:1 test (`tests/unit/{content,dates,library,slots,macros}.test.js`).
+  - `core/capture.js` (`MealsCapture`) — makeCapture, parseCaptures, isProcessed, markProcessed, makeSymptom
+  Index-html script order: content → dates → library → slots → macros → capture → meals-core (facade) → views. Each module has a 1:1 test (`tests/unit/{content,dates,library,slots,macros,capture}.test.js`).
 - `app.js` — DOM/render/event-wiring. Calls into `MealsCore` for every state transformation.
 - `app.css` — styles.
 - `shared/` — Shared infrastructure. **Do not edit.**
@@ -89,6 +96,22 @@ node scripts/library.js trends --format json                               # def
 - **`trends`** exports per-day macro totals over `--from`/`--to` (defaults: `to` = today, `from` = `to − 27d`), reading a dated calendar list (`--list <name>`, required) joined live to the library. `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range, empty days blank) or `json` (`{ from, to, days: [...] }`). Like the browser, its slot fetch is **bounded to `--from`/`--to`** via the generated `slot_date` column, so it stays well under Supabase's ~1000-row cap (see architecture.md "Known limits").
 - Writes to the real Supabase `listlet_meals` table (`list_name='library'`, or `trends`'s `--list`) — **not** mock/localStorage. It authenticates as a real user via a stored Google refresh token, never a `service_role` key.
 - Requires `.env` (see `.env.example`) with `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_REFRESH_TOKEN`. **If you (Claude) hit an auth error**, the token is missing/expired — ask the user to run `node scripts/google-login.js` once (it needs a browser OAuth round-trip you can't perform).
+
+## Capture CLI + reconcile
+
+`scripts/capture.js` is the reconcile half of [voice capture](docs/voice-capture.md) — raw captures (`?list=capture`) are dumb/verbatim; this CLI turns them into structured data. Same auth/`.env` as `library.js`.
+
+```
+node scripts/capture.js list [--all] [--format json]                       # unprocessed by default
+node scripts/capture.js get <id> [--format json]                            # id may be a unique prefix
+node scripts/capture.js add --text "smoothie and a banana" [--at <iso>]     # mainly for testing
+node scripts/capture.js place --list planner --library-id <uuid> --date <iso> [--type lunch]   # land food
+node scripts/capture.js symptom --list planner --date <iso> --text "upset stomach" [--severity 3] [--category gi]
+node scripts/capture.js process <id> --note "placed Chicken Wrap (lunch)"   # stamp processed_at + outcome
+```
+
+- **Reconcile via the `/reconcile-captures` skill** (`.claude/skills/reconcile-captures/`): list → classify food vs symptom → match against `library.js list` → `place` known meals, `add`/`update` recipes for unknown ones (the ad-hoc workflow above), `symptom` for symptoms → `process` each with a note. Collaborative: propose, confirm, execute — never invent macros/recipes silently.
+- `place` joins to a library meal by id and writes a slot (`MealsCore.addSlot`, type defaults to the meal's `default_meal_type`); `symptom` writes a dated `{ kind:'symptom', … }` row (`MealsCore.makeSymptom`) that range-fetches alongside slots. Both take an explicit `--list <calendar>` (no default).
 
 ## Testing
 

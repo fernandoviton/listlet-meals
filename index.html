@@ -60,11 +60,13 @@
     <script src="core/library.js"></script>
     <script src="core/slots.js"></script>
     <script src="core/macros.js"></script>
+    <script src="core/capture.js"></script>
     <script src="meals-core.js"></script>
     <script src="view/utils.js"></script>
     <script src="view/library.js"></script>
     <script src="view/week.js"></script>
     <script src="view/trends.js"></script>
+    <script src="view/captures.js"></script>
     <script src="app.js"></script>
 
     <!-- Init -->
@@ -74,12 +76,22 @@
         // Sync.init twice, and Supabase rejects a second subscribe on the same
         // channel ("cannot add postgres_changes callbacks ... after subscribe()").
         // Header.render stays outside the guard so a later sign-in still updates it.
+        // Stash a Shortcut-supplied capture (?text=&at=) BEFORE auth, so it
+        // survives the OAuth redirect (which drops the query string).
+        App.stashPendingCaptureFromUrl();
+
         var appBooted = false;
         Auth.init(async function(user) {
             Header.render(document.getElementById('header'), user);
             if (appBooted) return;
             appBooted = true;
             await App.ensureMockSeed();
+            // A pending capture flushes inside CapturesView (which shows feedback
+            // + a retry). If we're not already there, route to the capture log.
+            if (App.hasPendingCapture() && getListName() !== 'capture') {
+                window.location.replace('./?list=capture');
+                return;
+            }
             if (hasExplicitListName()) {
                 App.init(document.getElementById('app'), getListName());
             } else {

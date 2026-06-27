@@ -1133,3 +1133,129 @@ dialog#recipe-dialog[open] {
     }
     .day-add:hover { transform: none; }
 }
+
+/* =========================================================================
+   Captures — raw voice/quick-capture log (?list=capture)
+   ========================================================================= */
+.captures {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 1rem 1rem 3rem;
+}
+.capture-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+.capture-input {
+    font-family: var(--sans);
+    font-size: 1rem;            /* ≥16px so iOS doesn't zoom on focus */
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.75rem;
+    min-height: 56px;
+    resize: vertical;
+}
+.capture-input:focus {
+    outline: 2px solid var(--tomato);
+    outline-offset: -1px;
+}
+.capture-submit { align-self: flex-end; }
+
+.capture-status {
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: var(--r-sm);
+    margin-bottom: 1rem;
+}
+.capture-status.status-ok      { background: rgba(74,93,58,0.12); color: var(--olive); }
+.capture-status.status-err     { background: rgba(195,74,44,0.12); color: var(--tomato-2); }
+.capture-status.status-pending { background: var(--paper-2); color: var(--muted); }
+.capture-retry {
+    margin-left: 0.5rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--tomato-2);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.captures-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.captures-empty {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--muted);
+    padding: 1.5rem 0;
+}
+.captures-list { list-style: none; margin: 0; padding: 0; }
+.capture-item {
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.6rem;
+    box-shadow: var(--shadow-1);
+}
+.capture-item.is-processed { opacity: 0.62; }
+.capture-text {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    color: var(--ink);
+    line-height: 1.35;
+}
+.capture-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.35rem;
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    color: var(--muted);
+}
+.capture-source {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    font-size: 0.62rem;
+}
+.capture-badge {
+    margin-left: auto;
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: var(--mustard);
+    color: #fff;
+}
+.capture-item.is-processed .capture-badge { background: var(--olive); }
+.capture-note {
+    margin-top: 0.4rem;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    color: var(--ink-2);
+    border-left: 2px solid var(--line);
+    padding-left: 0.6rem;
+}
