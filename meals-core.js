@@ -13,6 +13,7 @@ var MealsCore = (function() {
     var Library = isNode ? require('./core/library') : MealsLibrary;
     var Slots   = isNode ? require('./core/slots')   : MealsSlots;
     var Macros  = isNode ? require('./core/macros')  : MealsMacros;
+    var Capture = isNode ? require('./core/capture') : MealsCapture;
 
     return {
         // content
@@ -43,7 +44,13 @@ var MealsCore = (function() {
         groupLibraryByType: Library.groupLibraryByType,
         makeLibraryMeal: Library.makeLibraryMeal,
         updateLibraryMeal: Library.updateLibraryMeal,
-        scaleRecipe: Library.scaleRecipe
+        scaleRecipe: Library.scaleRecipe,
+        // capture
+        makeCapture: Capture.makeCapture,
+        parseCaptures: Capture.parseCaptures,
+        isProcessed: Capture.isProcessed,
+        markProcessed: Capture.markProcessed,
+        makeSymptom: Capture.makeSymptom
     };
 })();
 

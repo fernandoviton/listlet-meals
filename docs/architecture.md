@@ -9,8 +9,9 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 - `?list=library` — the one special list: meal definitions (name, structured recipe, default meal type, macros).
 - `?list=<calendar>` — any non-`library` name is an independent calendar of planned slots on a **real, dated** Saturday-start week. `?date=YYYY-MM-DD` anchors which week renders (default: today); prev/next nav rewrites it. All calendars are structurally identical — there is **no default/privileged name**; a `?list=` is always explicit (Home shows the picker when it's absent).
 - `?list=<calendar>&view=trends[&date=][&range=2|4|12]` — read-only trends (calories/protein per day + weekly averages) for that calendar.
+- `?list=capture` — the raw voice/quick-capture log (the other special list). See "Voice capture" below.
 
-`index.html` boots in this order: shared infra (`shared/*.js`) → `core/{content,dates,library,slots,macros}.js` → `meals-core.js` (facade) → `view/utils.js` → `view/library.js` → `view/week.js` → `view/trends.js` → `app.js` → `Auth.init` callback that renders `Header`, runs `App.ensureMockSeed`, then either `App.init` (when a list is in the URL) or `Home.render`. `App.init` reads `?view=`: `trends` → `TrendsView.init`; otherwise it dispatches to `LibraryView.init` or `WeekView.init` based on `listName`.
+`index.html` boots in this order: shared infra (`shared/*.js`) → `core/{content,dates,library,slots,macros,capture}.js` → `meals-core.js` (facade) → `view/utils.js` → `view/library.js` → `view/week.js` → `view/trends.js` → `view/captures.js` → `app.js` → an inline `App.stashPendingCaptureFromUrl()` (pre-auth) → `Auth.init` callback that renders `Header`, runs `App.ensureMockSeed`, redirects to `?list=capture` if a capture is pending and we're elsewhere, then either `App.init` (when a list is in the URL) or `Home.render`. `App.init` reads `?view=`: `trends` → `TrendsView.init`; otherwise it dispatches to `CapturesView.init` (`capture`), `LibraryView.init` (`library`), or `WeekView.init` (any other name).
 
 ## Layers and boundaries
 
@@ -27,6 +28,8 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 │                 (dated planner, drag-and-drop, picker)   │
 │   trends.js   — TrendsView: ?view=trends (read-only      │
 │                 charts + weekly averages)                │
+│   captures.js — CapturesView: ?list=capture (raw         │
+│                 capture log + manual/Shortcut capture)   │
 │   utils.js    — ViewUtils: presentation helpers          │
 │                 (formatMacros, formatQuantity,           │
 │                 renderRecipeHtml). Pure, Jest-required.  │
@@ -43,6 +46,8 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 │   slots.js    — MealsSlots: nextOrder/add/move/remove/   │
 │                 setMealType/filterSlotsByType            │
 │   macros.js   — MealsMacros: resolveSlot, summarizeMacros│
+│   capture.js  — MealsCapture: make/parse/markProcessed   │
+│                 captures + makeSymptom                    │
 │ meals-core.js — thin facade re-exporting the flat        │
 │                 MealsCore object the views/CLI call.     │
 │                 Required by Jest, attached to            │
@@ -100,6 +105,18 @@ Notes:
 - Any macro field may be missing or `null`. `summarizeMacros` only emits keys that appeared at least once.
 - `order` is per-(date, meal_type), 0-indexed, and recompacted on move / delete.
 
+**Capture item content** (`?list=capture`):
+```js
+{ kind: "capture", text, at, source, processed_at, note? }
+```
+The raw voice/quick-capture log. Captures are stored **verbatim** — `text` is the dictated string, `at` the event time (ISO 8601, or `null`), `source` is `"shortcut" | "web" | "cli"`. The capture path does no interpretation; `processed_at` is `null` until the reconcile step lands the content and stamps an outcome `note`. Captures carry no `date`, so `slot_date` is `NULL` and they're excluded from calendar/trends range fetches. See "Voice capture" + [`docs/voice-capture.md`](voice-capture.md).
+
+**Symptom item content** (a reconcile output, written onto a calendar `?list=`):
+```js
+{ kind: "symptom", text, date, at, category, severity }
+```
+A dated symptom (`category`/`severity` may be `null`). Because it has a `date`, it range-fetches alongside meal slots; the planner/trends views currently read only `kind:"slot"`, so symptoms are surfaced in the capture log + CLI (planner chips are future work).
+
 ## `MealsCore` surface
 
 Implemented across the `core/` modules and re-exported, unchanged, by the `meals-core.js` facade — view modules and the CLI keep calling the same flat `MealsCore.*` names. Each module uses the same UMD-lite pattern (`var X = (function(){…})(); window.X = X; module.exports = X;`); cross-module deps resolve via `require('./content')` under Node and the script-tag-ordered global in the browser (`index.html` loads `core/content.js` → `dates.js` → `library.js` → `slots.js` → `macros.js` → `meals-core.js`). All pure; covered 1:1 by `tests/unit/{content,dates,library,slots,macros}.test.js` (each requires its module directly, not the facade).
@@ -124,6 +141,14 @@ Implemented across the `core/` modules and re-exported, unchanged, by the `meals
 - `updateLibraryMeal(existing, changes)` → merges `changes` onto an existing parsed meal and returns a fresh `content` object. Only fields present in `changes` override; macros merge per-key (pass `''`/`null` to clear one); a `changes.recipe` flows through `normalizeRecipe` via `makeLibraryMeal`. The `adhoc` flag is preserved unless `changes.adhoc` is present (a recipe-only change does **not** clear it — promotion is CLI policy, not core policy). Validation is delegated to `makeLibraryMeal`. Lets the CLI edit a row **in place** (stable `id`) so placed week slots keep their recipe link.
 - `scaleRecipe(recipe, factor)` → a new (non-mutating) recipe with each numeric ingredient `qty` multiplied by `factor` (`null` qty stays `null`; units/items/notes/steps untouched). Tolerates a missing / `null` / `{}` recipe (returns `{ ingredients: [], steps: [] }`), since `getLibraryMeal` returns `{}` for an orphaned slot.
 
+From `core/capture.js` (`MealsCapture`; covered by `tests/unit/capture.test.js`):
+
+- `makeCapture({ text, at?, source? })` → `{ kind:'capture', text, at, source, processed_at:null }`. Trims/requires `text`; `at` kept only if a non-empty string (else `null`); `source` defaults to `'unknown'`.
+- `parseCaptures(items)` → parsed capture objects (`kind:'capture'` only) with the row `id` attached, sorted newest-first by `at` (captures with no `at` last). Null/empty input → `[]`.
+- `isProcessed(capture)` → `!!capture.processed_at`.
+- `markProcessed(capture, { at, note? })` → non-mutating copy with `processed_at` stamped and an optional outcome `note`.
+- `makeSymptom({ text, date, at?, category?, severity? })` → `{ kind:'symptom', … }`; requires non-blank `text` + a valid ISO `date`, coerces `severity` to a finite number or `null`.
+
 ## `ViewUtils` surface
 
 Defined in `view/utils.js`. Pure presentation helpers, covered by `tests/unit/view-utils.test.js`.
@@ -140,6 +165,7 @@ A thin shell:
 
 - `App.init(el, listName)` — creates the per-list `api`, then reads `?view=`: `trends` → `TrendsView.init` (the trends view reads a planner list, so this is gated before the list branch; `?list=library&view=trends` is harmless-empty). Otherwise dispatches to `WeekView.init` (any non-`library` list) or `LibraryView.init`. The planner is **not** tied to any particular name; any non-library `?list=` renders a planner, so all in-view nav links must carry the *current* `api.listName`, never a literal name.
 - `App.ensureMockSeed()` — one-time `DEMO_LIBRARY` insert when running in mock mode with an empty library. Called from `index.html` before any view init.
+- Capture plumbing: `App.stashPendingCaptureFromUrl()` (run inline pre-`Auth.init`) reads `?text=&at=&source=` and, if `text` is present, stashes `{text, at, source}` to `localStorage` then strips those params via `history.replaceState` (so a reload can't double-capture). It runs before auth so the stash survives the OAuth redirect (which drops the query string). `App.hasPendingCapture()` peeks; `App.takePendingCapture()` reads-and-clears atomically. The boot routes a pending capture to `?list=capture` when not already there; `CapturesView` does the actual insert + UI feedback.
 
 ## View module responsibilities
 
@@ -155,6 +181,12 @@ Each `*View.init(container, api)` module:
 `WeekView` additionally fetches the library alongside the week on boot (`loadAndRender`, in parallel) and keeps a `libraryCache` + a `libraryById` map (`MealsCore.indexLibrary`). Before fetching it calls `api.setDateRange(weekDates[0], weekDates[6])` so the slot fetch — and Sync's later arg-less refresh — is **bounded to the visible week** via the `slot_date` column (no ~1000-row cap exposure). Nav is a full page reload, so the range is recomputed per load; the library fetch is left unbounded. The map drives the live join for slot names, macros, and day totals; `libraryCache` also feeds the picker and the recipe modal's `getLibraryMeal`. `libraryById` is initialized to `{}` (not null) so a realtime `Sync`-triggered `render()` that fires before the library load resolves slots to fallbacks instead of crashing. It resolves a module-level `weekOf` once in `init` (from `?date=` validated via `isIsoDate`, else `localIsoDate(new Date())`, snapped to `weekStart`); `render` iterates `weekDates(weekOf)`, tags columns/sections/summaries with `data-date`, marks today's column `.today`, and renders a week-nav bar (`‹` / `Week of …` / `›` plain links that rewrite `?date=`, plus **Today** and **Trends**). Every nav link carries the current `?list=` (`api.listName`, URL-encoded), not a hardcoded name, so the planner stays on whatever list it was opened under. A `Sync` re-render keeps the same `weekOf` (module state).
 
 `TrendsView` is **read-only** (no `Sync`). It resolves `weekOf` + `range` (∈ 2|4|12, default 4) from the URL, fetches the week + library in parallel (the slot fetch bounded to the range window via `api.fetchItems({dateFrom,dateTo})`, the same `rangeWindow()` used by `render`), builds `summarizeMacrosByDate`, and renders range pills (links), a back-to-planner link (all carrying the current `?list=`, not a hardcoded name), two inline-SVG bar charts (`cal`/`protein` per day, scaled to the range max), and a `summarizeWeeklyAverages` table. The SVG fills width via `preserveAspectRatio="none"` (non-uniform scale) so it holds **bars only**; the Saturday tick labels render as HTML in a sibling `.trends-axis` row, each positioned at its bar's center percentage, so glyphs never stretch with the chart. The range ends at the anchored week's Friday and extends `range` Saturdays back.
+
+`CapturesView` renders `?list=capture`, the raw capture log. It owns the manual capture box (a textarea → `MealsCore.makeCapture({ source:'web' })` → `api.createItem`) and `flushPending()`, which inserts a Shortcut/redirect-stashed capture (via `App.takePendingCapture()`) with inline status (`Saving…` / `✓ Captured` / error + Retry — the retry holds the capture object in memory, so a transient failure isn't lost). It wires `Sync` for cross-tab refresh and renders captures via `MealsCore.parseCaptures` newest-first, each with a `new`/`reconciled` badge and (when processed) its outcome note. It does **no** interpretation — that's the reconcile CLI/skill.
+
+### Voice capture
+
+End-to-end flow for the dictation → reconcile path: the iOS Shortcut opens `?list=capture&text=…&at=…`; `App.stashPendingCaptureFromUrl()` stashes it pre-auth (surviving the OAuth redirect), `CapturesView` inserts the raw row under the existing Google session (no endpoint/secret/service-role key), and later `scripts/capture.js` + the `/reconcile-captures` skill turn raw text into meal slots / library recipes / symptom rows and stamp each capture processed. The capture/interpret split is the core principle — capture is dumb and fast; all intelligence is in reconcile. Full guide (incl. Shortcut build steps): [`docs/voice-capture.md`](voice-capture.md).
 
 ### Picker + quick add
 
@@ -196,6 +228,7 @@ The whole library card is the toggle: click (or Enter/Space when focused) flips 
 Node scripts for tasks the browser app has no UI for yet — currently managing the meal library. These run in Node, never in the browser, and read credentials from a gitignored `.env` (see `.env.example`), separate from `config.local.js`.
 
 - `scripts/library.js` — `list` / `add` / `update` / `delete` library meals. `add` and `update` accept `--file <path.json>` (a whole-meal JSON document `{ name, type, macros, recipe }` — the way to supply a structured recipe; its CLI-friendly `type` is mapped to `default_meal_type` before calling core), plus scalar flags (`--name`/`--type`/`--cal`/…) that override the file's fields. `add` builds `content` via `MealsCore.makeLibraryMeal`; `update` selects a row by `--id`/`--name` and rewrites its `content` in place via `MealsCore.updateLibraryMeal` (id stays stable, so week slots that point at it keep their recipe); `delete` accepts `--id <uuid>` or `--name <name>` (errors if a name is ambiguous). Ad-hoc support: `list` tags quick-added meals `[adhoc]` and `list --adhoc` filters to them; on `update`, passing `--file` **promotes** the meal (clears the flag — a full recipe means it's real), with `--adhoc true|false` as the explicit override. A `trends` subcommand exports per-day macro totals over `--from`/`--to` (defaults: `to` = local today, `from` = `to − 27d`) from a dated calendar list (`--list <name>`, required) joined live to the library, as `--format csv` (header `date,cal,protein,carbs,fat`, one row per day in range) or `json` (`{ from, to, days }`). Reads/writes the `listlet_meals` table (`list_name = 'library'`, or the `trends` `--list`).
+- `scripts/capture.js` — the reconcile half of voice capture. `list [--all]` / `get <id>` read the `capture` list (parsed via `MealsCore.parseCaptures`); `add --text` inserts a raw capture (mostly for testing); `place --list <cal> --library-id <uuid> --date <iso> [--type]` lands a food capture as a calendar slot (`MealsCore.addSlot`); `symptom --list <cal> --date <iso> --text … [--severity] [--category]` lands a symptom row (`MealsCore.makeSymptom`); `process <id> --note …` stamps `processed_at` + an outcome note (`MealsCore.markProcessed`). Same `.env`/refresh-token auth as `library.js`. Driven interactively by the `/reconcile-captures` skill (`.claude/skills/reconcile-captures/`).
 - `scripts/supabase-cli.js` — shared client. Authenticates as a real user with a stored Google **refresh token** (not a `service_role` key), so the CLI is bound by the same RLS as the app. Supabase rotates the refresh token on each use, so `login()` writes the new token back to `.env`.
 - `scripts/google-login.js` — one-time bootstrap: serves `http://localhost:3000`, runs the Google OAuth flow, and writes `SUPABASE_REFRESH_TOKEN` into `.env`. Requires the Google provider enabled and `http://localhost:3000/auth/callback` allow-listed in Supabase.
 
@@ -209,9 +242,9 @@ This is noted alongside future work like auto meal-picking and meal-prep plannin
 
 ## Tests
 
-- `tests/unit/{content,dates,library,slots,macros}.test.js` — Jest, pure-function coverage of the `core/` modules (1:1 with the modules).
+- `tests/unit/{content,dates,library,slots,macros,capture}.test.js` — Jest, pure-function coverage of the `core/` modules (1:1 with the modules).
 - `tests/unit/view-utils.test.js` — Jest, pure-function coverage of `ViewUtils.formatMacros`, `formatQuantity`, and `renderRecipeHtml`.
-- `tests/e2e/*.spec.js` — Playwright, drives the real DOM in mock mode (seed, planner, calendar, trends, library, filter, picker, meal-type, delete, quick-add, recipe-scroll, touch-drag). Date-dependent specs pin a fixed Saturday anchor (`2026-06-06`) for determinism.
+- `tests/e2e/*.spec.js` — Playwright, drives the real DOM in mock mode (seed, planner, calendar, trends, library, filter, picker, meal-type, delete, quick-add, recipe-scroll, touch-drag, capture). Date-dependent specs pin a fixed Saturday anchor (`2026-06-06`) for determinism.
 - `npm test` / `npm run test:e2e` / `npm run test:all`.
 
 Working agreement: don't commit on red. TDD when a test can fail first — Jest for `meals-core`, Playwright for DOM/glue.
@@ -226,16 +259,19 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `core/library.js` | `MealsLibrary` — build/update/index/group/summarize/scale meals |
 | `core/slots.js` | `MealsSlots` — slot ordering + add/move/remove/retype |
 | `core/macros.js` | `MealsMacros` — slot→library join, macro summaries |
+| `core/capture.js` | `MealsCapture` — make/parse/markProcessed captures + makeSymptom |
 | `meals-core.js` | Thin facade re-exporting the flat `MealsCore` object |
-| `app.js` | Shell: dispatch by `?list=`, mock-mode seed |
+| `app.js` | Shell: dispatch by `?list=`, mock-mode seed, capture stash/flush |
 | `view/utils.js` | `ViewUtils` — shared view-layer helpers (`formatMacros`, `formatQuantity`, `renderRecipeHtml`) |
 | `view/library.js` | `LibraryView` — renders `?list=library` |
 | `view/week.js` | `WeekView` — renders any non-`library` `?list=` calendar (dated grid, drag, picker, cards, week-nav) |
 | `view/trends.js` | `TrendsView` — read-only `?view=trends` (charts + weekly averages) |
+| `view/captures.js` | `CapturesView` — raw capture log + manual/Shortcut capture (`?list=capture`) |
 | `app.css` | App-specific styles |
 | `config.js` / `config.local.js` | Runtime config |
 | `shared/` | Upstream starter kit — do not edit (one documented exception: `api.js` date-range param) |
 | `scripts/library.js` | CLI to list/add/update/delete library meals (no UI yet) |
+| `scripts/capture.js` | CLI to reconcile raw captures → slots / symptoms / processed |
 | `scripts/supabase-cli.js` | Shared CLI Supabase client + refresh-token login |
 | `scripts/google-login.js` | One-time OAuth bootstrap for the CLI refresh token |
 | `.env` / `.env.example` | CLI credentials (gitignored / template) |
@@ -244,3 +280,5 @@ Working agreement: don't commit on red. TDD when a test can fail first — Jest 
 | `tests/unit/` | Jest |
 | `tests/e2e/` | Playwright |
 | `docs/architecture.md` | This file |
+| `docs/voice-capture.md` | Voice capture flow + iOS Shortcut build steps |
+| `.claude/skills/reconcile-captures/` | Skill driving the capture → structured-data reconcile loop |
