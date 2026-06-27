@@ -1,7 +1,7 @@
 # Voice capture for food + symptoms
 
-A frictionless capture path: speak a short note ("smoothie and a banana", "bad gas
-right now") into an iOS Shortcut. The note plus its timestamp is stored **verbatim**
+A frictionless capture path: speak a short note ("smoothie and a banana", "upset
+stomach right now") into an iOS Shortcut. The note plus its timestamp is stored **verbatim**
 in a raw capture log. No parsing or macro math happens at capture time — that is
 fully decoupled into a later [reconcile step](#reconcile-the-claude-code-half).
 
@@ -94,7 +94,7 @@ node scripts/capture.js get <id> --format json       # one capture
 node scripts/capture.js place --list planner --library-id <uuid> --date 2026-06-27 [--type lunch]
 
 # Land a symptom: dated symptom row on a calendar
-node scripts/capture.js symptom --list planner --date 2026-06-27 --text "bad gas" --severity 3 --category gi
+node scripts/capture.js symptom --list planner --date 2026-06-27 --text "upset stomach" --severity 3 --category gi
 
 # Mark processed with an outcome note (shows in the web log)
 node scripts/capture.js process <id> --note "placed Chicken Wrap (lunch)"

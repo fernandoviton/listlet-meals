@@ -47,11 +47,11 @@ test('manual capture: typing + submit appends a new capture and persists', async
 
 test('shortcut auto-capture: ?text= is stored verbatim with its event time', async ({ page }) => {
     await seedCaptures(page, []);
-    await page.goto('/?list=capture&text=' + encodeURIComponent('bad gas right now') + '&at=2026-06-27T14:03:00Z&source=shortcut');
+    await page.goto('/?list=capture&text=' + encodeURIComponent('upset stomach right now') + '&at=2026-06-27T14:03:00Z&source=shortcut');
 
-    await expect(page.locator('.capture-status')).toContainText('bad gas right now');
+    await expect(page.locator('.capture-status')).toContainText('upset stomach right now');
     const item = page.locator('.capture-item').first();
-    await expect(item.locator('.capture-text')).toHaveText('bad gas right now');
+    await expect(item.locator('.capture-text')).toHaveText('upset stomach right now');
     await expect(item.locator('.capture-source')).toHaveText('shortcut');
 
     // The capture params are stripped so a reload can't double-capture.

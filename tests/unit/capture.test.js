@@ -14,7 +14,7 @@ describe('MealsCapture.makeCapture', () => {
 
     test('keeps a provided timestamp and source verbatim', () => {
         const c = MealsCapture.makeCapture({
-            text: 'bad gas right now',
+            text: 'upset stomach right now',
             at: '2026-06-27T14:03:00Z',
             source: 'shortcut'
         });
@@ -87,10 +87,10 @@ describe('MealsCapture.markProcessed', () => {
 
 describe('MealsCapture.makeSymptom', () => {
     test('builds a dated symptom row, coercing severity and defaulting optionals', () => {
-        const s = MealsCapture.makeSymptom({ text: 'bad gas', date: '2026-06-27', at: '2026-06-27T14:03:00Z', category: 'gi', severity: '3' });
+        const s = MealsCapture.makeSymptom({ text: 'upset stomach', date: '2026-06-27', at: '2026-06-27T14:03:00Z', category: 'gi', severity: '3' });
         expect(s).toEqual({
             kind: 'symptom',
-            text: 'bad gas',
+            text: 'upset stomach',
             date: '2026-06-27',
             at: '2026-06-27T14:03:00Z',
             category: 'gi',

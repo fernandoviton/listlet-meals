@@ -26,7 +26,7 @@ If empty, tell the user and stop. Otherwise note each capture's `id`, `text`, an
 Read the text and decide:
 
 - **Food** ("smoothie and a banana", "had the chicken wrap") → one or more meals to place.
-- **Symptom** ("bad gas right now", "low energy", "headache") → a symptom row.
+- **Symptom** ("upset stomach right now", "low energy", "headache") → a symptom row.
 - **Both / ambiguous** → ask the user.
 
 ## 3a. Food → match to the library, then place
@@ -61,7 +61,7 @@ node scripts/library.js list
 ## 3b. Symptom → log a dated symptom row
 
 ```bash
-node scripts/capture.js symptom --list <cal> --date <iso> --text "bad gas" [--at <iso>] [--severity 1-5] [--category gi]
+node scripts/capture.js symptom --list <cal> --date <iso> --text "upset stomach" [--at <iso>] [--severity 1-5] [--category gi]
 ```
 
 Propose a short `--category` (e.g. `gi`, `energy`, `skin`, `sleep`) and, if the user gives a sense of intensity, a numeric `--severity`. Keep `--text` close to the user's words.

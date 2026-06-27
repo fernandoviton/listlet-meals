@@ -106,7 +106,7 @@ node scripts/capture.js list [--all] [--format json]                       # unp
 node scripts/capture.js get <id> [--format json]                            # id may be a unique prefix
 node scripts/capture.js add --text "smoothie and a banana" [--at <iso>]     # mainly for testing
 node scripts/capture.js place --list planner --library-id <uuid> --date <iso> [--type lunch]   # land food
-node scripts/capture.js symptom --list planner --date <iso> --text "bad gas" [--severity 3] [--category gi]
+node scripts/capture.js symptom --list planner --date <iso> --text "upset stomach" [--severity 3] [--category gi]
 node scripts/capture.js process <id> --note "placed Chicken Wrap (lunch)"   # stamp processed_at + outcome
 ```
 

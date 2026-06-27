@@ -8,7 +8,7 @@
 //   node scripts/capture.js add --text "smoothie and a banana" [--at <iso>]
 //   node scripts/capture.js process <id> [--note "placed Oatmeal (breakfast)"]
 //   node scripts/capture.js place --list <cal> --library-id <uuid> --date <iso> [--type <t>]
-//   node scripts/capture.js symptom --list <cal> --date <iso> --text "bad gas" [--severity 3] [--category gi]
+//   node scripts/capture.js symptom --list <cal> --date <iso> --text "upset stomach" [--severity 3] [--category gi]
 //
 // Auth: reuses the stored Google refresh token (see scripts/google-login.js).
 
