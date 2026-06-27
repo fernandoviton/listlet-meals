@@ -29,7 +29,8 @@ A static, build-step-free vanilla-JS app on top of the `listlet-shared` starter 
 │   trends.js   — TrendsView: ?view=trends (read-only      │
 │                 charts + weekly averages)                │
 │   captures.js — CapturesView: ?list=capture (raw         │
-│                 capture log + manual/Shortcut capture)   │
+│                 capture log + manual/Shortcut capture,   │
+│                 upload-URL + iOS-Shortcut help dialog)   │
 │   utils.js    — ViewUtils: presentation helpers          │
 │                 (formatMacros, formatQuantity,           │
 │                 renderRecipeHtml). Pure, Jest-required.  │

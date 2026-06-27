@@ -60,6 +60,34 @@ test('shortcut auto-capture: ?text= is stored verbatim with its event time', asy
     await expect(page.locator('.capture-item')).toHaveCount(1);
 });
 
+test('planner week nav links to the capture log', async ({ page }) => {
+    await seedCaptures(page, []);
+    await page.goto('/?list=planner');
+
+    const log = page.locator('.week-nav-log');
+    await expect(log).toHaveAttribute('href', /\?list=capture$/);
+    await log.click();
+    await expect(page).toHaveURL(/\?list=capture$/);
+    await expect(page.locator('.capture-box')).toBeVisible();
+});
+
+test('capture log exposes the upload URL and an iOS Shortcut help dialog', async ({ page }) => {
+    await seedCaptures(page, []);
+    await page.goto('/?list=capture');
+
+    // The page surfaces the capture endpoint URL so a Shortcut can target it.
+    const url = page.locator('.capture-url-value');
+    await expect(url).toContainText('?list=capture');
+
+    // Help is hidden until asked for, then reveals the Shortcut build steps + URL template.
+    const help = page.locator('.capture-help-dialog');
+    await expect(help).toBeHidden();
+    await page.locator('.capture-help-btn').click();
+    await expect(help).toBeVisible();
+    await expect(help).toContainText('Shortcut');
+    await expect(help.locator('.capture-shortcut-url')).toContainText('text=');
+});
+
 test('processed capture renders the reconciled badge + note and dims', async ({ page }) => {
     await seedCaptures(page, [
         captureRow('cap-1', 'oatmeal', { processed_at: '2026-06-27T09:00:00Z', note: 'placed Oatmeal (breakfast)' })

@@ -74,6 +74,31 @@ var CapturesView = (function() {
         flushPending();
     }
 
+    // The capture "endpoint" is just this page. Build the bare upload URL and the
+    // Shortcut-flavoured template (with the magic text/at params) from the live
+    // origin, so the help always shows the correct address for wherever it's hosted.
+    function captureBaseUrl() {
+        if (typeof window === 'undefined') return '?list=capture';
+        return window.location.origin + window.location.pathname + '?list=capture';
+    }
+
+    function shortcutUrl() {
+        return captureBaseUrl() + '&source=shortcut&text=[Dictated Text]&at=[Current Date]';
+    }
+
+    function onCopyUrl(e) {
+        var btn = e.currentTarget;
+        var url = captureBaseUrl();
+        function flash() {
+            var prev = btn.textContent;
+            btn.textContent = 'Copied';
+            setTimeout(function() { btn.textContent = prev; }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(flash, function() {});
+        }
+    }
+
     function fmtTime(at) {
         if (!at) return '(no time)';
         var d = new Date(at);
@@ -86,6 +111,17 @@ var CapturesView = (function() {
         var unprocessed = captures.filter(function(c) { return !MealsCore.isProcessed(c); }).length;
 
         var html = '<div class="captures">';
+
+        // Read-only upload tools: the capture endpoint URL (copyable, so you can
+        // point a Shortcut at it) and a help button that opens the build steps.
+        html += '<div class="capture-tools">' +
+            '<div class="capture-url">' +
+                '<span class="capture-url-label">Capture URL</span>' +
+                '<code class="capture-url-value">' + escapeHtml(captureBaseUrl()) + '</code>' +
+                '<button type="button" class="capture-url-copy">Copy</button>' +
+            '</div>' +
+            '<button type="button" class="capture-help-btn">Set up iOS Shortcut</button>' +
+        '</div>';
 
         html += '<form class="capture-box">' +
             '<textarea class="capture-input" rows="2" placeholder="Log a meal or symptom… (e.g. “smoothie and a banana”)"></textarea>' +
@@ -124,12 +160,61 @@ var CapturesView = (function() {
             html += '</ul>';
         }
 
+        html += renderHelpDialog();
+
         html += '</div>';
         container.innerHTML = html;
 
         container.querySelector('.capture-box').addEventListener('submit', onSubmit);
         var retry = container.querySelector('.capture-retry');
         if (retry) retry.addEventListener('click', onRetry);
+        container.querySelector('.capture-url-copy').addEventListener('click', onCopyUrl);
+        bindHelpEvents();
+    }
+
+    // Step-by-step iOS Shortcut setup (mirrors docs/voice-capture.md), shown in a
+    // modal so the capture log stays uncluttered until you ask for it.
+    function renderHelpDialog() {
+        var steps = [
+            'Open <strong>Shortcuts</strong> → <strong>+</strong> and name it e.g. “Log food/symptom”.',
+            'Add <strong>Dictate Text</strong> (Stop Listening → <em>After Pause</em>).',
+            'Add <strong>Get Current Date</strong>.',
+            'Add <strong>Text</strong> and paste the URL below, replacing the bracketed bits with the ' +
+                '<strong>Dictated Text</strong> and <strong>Current Date</strong> variable chips (set Current Date’s format to <em>ISO 8601</em>).',
+            'Add <strong>Open URLs</strong> using that Text.',
+            'Optional: <strong>Add to Home Screen</strong> or wire it to the Action Button / Back Tap / “Hey Siri”.'
+        ];
+        var html = '<dialog class="capture-help-dialog">' +
+            '<div class="capture-help-head">' +
+                '<span class="capture-help-title">Set up the iOS Shortcut</span>' +
+                '<button type="button" class="capture-help-close" aria-label="Close">&times;</button>' +
+            '</div>' +
+            '<p class="capture-help-intro">Dictate a short note and it lands in this log, ready to reconcile. ' +
+                'The Shortcut just opens this page with your text — no backend, it reuses your sign-in.</p>' +
+            '<ol class="capture-help-steps">';
+        for (var i = 0; i < steps.length; i++) html += '<li>' + steps[i] + '</li>';
+        html += '</ol>' +
+            '<div class="capture-shortcut-label">Shortcut URL</div>' +
+            '<code class="capture-shortcut-url">' + escapeHtml(shortcutUrl()) + '</code>' +
+            '<div class="capture-help-actions">' +
+                '<button type="button" class="capture-help-done btn btn-primary">Done</button>' +
+            '</div>' +
+        '</dialog>';
+        return html;
+    }
+
+    function bindHelpEvents() {
+        var dialog = container.querySelector('.capture-help-dialog');
+        var open = container.querySelector('.capture-help-btn');
+        if (!dialog || !open) return;
+        open.addEventListener('click', function() {
+            if (typeof dialog.showModal === 'function') dialog.showModal();
+            else dialog.setAttribute('open', '');
+        });
+        function close() { dialog.close ? dialog.close() : dialog.removeAttribute('open'); }
+        dialog.querySelector('.capture-help-close').addEventListener('click', close);
+        dialog.querySelector('.capture-help-done').addEventListener('click', close);
+        dialog.addEventListener('click', function(e) { if (e.target === dialog) close(); });
     }
 
     return {
