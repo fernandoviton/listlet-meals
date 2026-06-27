@@ -113,7 +113,11 @@ reconcile becomes mostly "match + place".
 ## Where it shows up
 
 - **Capture log** — `?list=capture`: every raw capture, newest first, with a
-  `new` / `reconciled` badge and the outcome note.
+  `new` / `reconciled` badge and the outcome note. Reach it from the planner's
+  week nav (**Log**). The page also surfaces the copyable capture URL and a
+  **Set up iOS Shortcut** button that opens the build steps + URL template
+  (the in-app mirror of the [Build the iOS Shortcut](#build-the-ios-shortcut)
+  section above), so a phone can set the Shortcut up without leaving the app.
 - **Planner** — `?list=<cal>`: placed meals appear as normal slots and count toward
   day/week totals.
 - **Trends** — `?list=<cal>&view=trends`: placed meals feed the charts like any slot.

@@ -227,6 +227,9 @@ var WeekView = (function() {
             '<div class="week-nav-group week-nav-jump">' +
                 '<a class="week-nav-today" href="' + list + '">Today</a>' +
                 '<a class="week-nav-trends" href="' + list + '&view=trends&date=' + weekOf + '">Trends</a>' +
+                // Captures are calendar-independent, so the Log link drops the
+                // current ?list= and jumps straight to the shared capture log.
+                '<a class="week-nav-log" href="?list=capture">Log</a>' +
             '</div>' +
             '</div>';
     }
