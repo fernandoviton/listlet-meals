@@ -23,6 +23,22 @@ For deployment and OAuth setup, see the [listlet-shared README](../listlet-share
 If you also want to use the library CLI below, add `http://localhost:3000/auth/callback` to
 the allowed redirect URLs in Supabase → Authentication → URL Configuration.
 
+### Granting access to another person
+
+Google OAuth accepts **any** Google account by default — there is no allow-list, so
+anyone who finds the URL can sign in. To control who gets in, gate it with the signup
+toggle (**toggle, don't pre-create** — this avoids OAuth/identity-linking edge cases):
+
+1. Supabase dashboard → Authentication → turn **"Allow new users to sign up" ON**.
+2. Have the new person **sign in with Google once** — this creates their user with the
+   Google identity directly.
+3. Turn the toggle back **OFF** — now only existing users can sign in.
+
+> **Note:** This only gates *who can log in*. It does **not** scope data — the RLS in
+> `sql/setup.sql` is `to authenticated using (true)`, so any logged-in user has full
+> read/write over *all* data. To actually restrict access per user, add an email
+> allow-list in RLS (check `auth.jwt() ->> 'email'` against an `allowed_emails` table).
+
 ## Managing the meal library (CLI)
 
 There is **no in-app UI for adding/editing/deleting library meals yet** — use the CLI.
