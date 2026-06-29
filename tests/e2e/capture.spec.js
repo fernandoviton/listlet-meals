@@ -88,6 +88,21 @@ test('capture log exposes the upload URL and an iOS Shortcut help dialog', async
     await expect(help.locator('.capture-shortcut-url')).toContainText('text=');
 });
 
+test('a background sync does not clobber in-progress capture text', async ({ page }) => {
+    await seedCaptures(page, []);
+    await page.goto('/?list=capture');
+
+    const input = page.locator('.capture-input');
+    await input.click();
+    await input.fill('half typed note about lunch');
+
+    // Simulate the 30s poll tick (Sync) firing mid-typing. It must not rebuild
+    // the textarea out from under the user and lose what they've typed.
+    await page.evaluate(() => window.Sync.manualRefresh());
+
+    await expect(input).toHaveValue('half typed note about lunch');
+});
+
 test('processed capture renders the reconciled badge + note and dims', async ({ page }) => {
     await seedCaptures(page, [
         captureRow('cap-1', 'oatmeal', { processed_at: '2026-06-27T09:00:00Z', note: 'placed Oatmeal (breakfast)' })
