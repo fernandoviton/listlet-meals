@@ -64,6 +64,9 @@ var CapturesView = (function() {
         var textarea = container.querySelector('.capture-input');
         var text = (textarea.value || '').trim();
         if (!text) return;
+        // Clear before the flush re-renders so the draft-preservation in render()
+        // doesn't carry the just-submitted text back into the empty box.
+        textarea.value = '';
         // Stage a plain input object; flushPending() runs it through makeCapture
         // (the single insert path shared with the Shortcut/redirect flush).
         pendingRetry = { text: text, source: 'web', at: new Date().toISOString() };
@@ -107,6 +110,15 @@ var CapturesView = (function() {
     }
 
     function render() {
+        // A background Sync tick (30s poll / realtime) re-renders by rebuilding
+        // container.innerHTML, which would otherwise tear down the textarea and
+        // lose whatever the user is mid-typing. Snapshot the draft (and caret /
+        // focus) before the rebuild and restore it after.
+        var prevInput = container.querySelector('.capture-input');
+        var draft = prevInput ? prevInput.value : null;
+        var hadFocus = !!(prevInput && document.activeElement === prevInput);
+        var caret = prevInput ? prevInput.selectionStart : null;
+
         var captures = MealsCore.parseCaptures(items);
         var unprocessed = captures.filter(function(c) { return !MealsCore.isProcessed(c); }).length;
 
@@ -164,6 +176,17 @@ var CapturesView = (function() {
 
         html += '</div>';
         container.innerHTML = html;
+
+        // Restore any in-progress draft the rebuild above would have dropped.
+        var input = container.querySelector('.capture-input');
+        if (input && draft) {
+            input.value = draft;
+            if (hadFocus) {
+                input.focus();
+                var pos = caret == null ? draft.length : caret;
+                try { input.setSelectionRange(pos, pos); } catch (e) {}
+            }
+        }
 
         container.querySelector('.capture-box').addEventListener('submit', onSubmit);
         var retry = container.querySelector('.capture-retry');
